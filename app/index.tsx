@@ -22,8 +22,27 @@ import {
 import { useHistoryStore } from '../src/store/historyStore';
 import { useWorkoutStore } from '../src/store/workoutStore';
 import { getTodayWorkout, getNextWorkout, WORKOUTS } from '../src/data/workouts';
+import { canUseExactAlarms, openAlarmSettings } from '../src/utils/notificationService';
 import { getAdaptedTiming, estimateTotalDuration } from '../src/utils/timing';
 import { Exercise, WorkoutDay } from '../src/types';
+
+// Once per app launch: if Android's "Alarms & reminders" permission is off,
+// the background set/break alerts silently never fire — tell the user where
+// the switch lives. Asked at workout start, when it's about to matter.
+let alarmPromptShown = false;
+async function maybePromptAlarmPermission() {
+  if (alarmPromptShown) return;
+  if (await canUseExactAlarms()) return;
+  alarmPromptShown = true;
+  Alert.alert(
+    'Enable background alerts',
+    'Android is blocking exact timers for this app, so the set/break alerts won\'t sound while the phone is locked or you\'re in another app.\n\nTurn on "Alarms & reminders" for Workout Timer to fix it.',
+    [
+      { text: 'Open settings', onPress: () => openAlarmSettings() },
+      { text: 'Not now', style: 'cancel' },
+    ],
+  );
+}
 
 function HeaderIconButton({
   label,
@@ -100,6 +119,7 @@ export default function HomeScreen() {
       startSet(timing.setDuration);
     }
     router.push('/workout');
+    maybePromptAlarmPermission();
   }
 
   function handleStartWorkout(workout: WorkoutDay | null = today, startIndex = 0) {

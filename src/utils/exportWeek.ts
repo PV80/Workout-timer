@@ -1,5 +1,6 @@
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { useHistoryStore } from '../store/historyStore';
 import { useTrackerStore } from '../store/trackerStore';
 import { BodyweightEntry, TrackerEntry } from '../types';
 import { buildBackup } from './backup';
@@ -21,7 +22,8 @@ export async function exportWeekFiles(
 ): Promise<'shared' | 'nothing' | { savedTo: string }> {
   if (entries.length === 0 && bodyweights.length === 0) return 'nothing';
 
-  const csv = buildWeekCsv(entries, bodyweights);
+  // Sessions provide the app-timed per-set durations (set_time_s column).
+  const csv = buildWeekCsv(entries, bodyweights, useHistoryStore.getState().sessions);
   const csvUri = `${FileSystem.cacheDirectory}workout-${label}.csv`;
   await FileSystem.writeAsStringAsync(csvUri, csv, { encoding: FileSystem.EncodingType.UTF8 });
 
@@ -48,6 +50,22 @@ export async function exportWeekFiles(
     return 'shared';
   }
   return { savedTo: `${csvUri}\n${jsonUri}` };
+}
+
+/**
+ * Export THIS week, reading the stores fresh at call time. Always use this
+ * (not screen-level props/hooks) when exporting right after a capture or
+ * weigh-in: a React render closure can hold the pre-capture entry list, which
+ * is exactly how a just-captured Friday page once vanished from the CSV.
+ */
+export async function exportCurrentWeek(): Promise<'shared' | 'nothing' | { savedTo: string }> {
+  const { entries, bodyweights } = useTrackerStore.getState();
+  const week = weekKey();
+  return exportWeekFiles(
+    entries.filter((e) => e.weekKey === week),
+    bodyweights.filter((b) => b.weekKey === week),
+    week,
+  );
 }
 
 /** Share just the JSON backup (Settings → "Back up now"). */

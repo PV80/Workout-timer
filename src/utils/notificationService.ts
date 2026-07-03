@@ -1,5 +1,7 @@
 import notifee, {
+  AndroidCategory,
   AndroidImportance,
+  AndroidNotificationSetting,
   AndroidVisibility,
   RepeatFrequency,
   TimestampTrigger,
@@ -73,6 +75,30 @@ export async function setupNotifications(): Promise<void> {
   } catch {}
 }
 
+/**
+ * Android 14+ (and Samsung's One UI in particular) denies the "Alarms &
+ * reminders" special permission by default. Our end-of-phase alerts are
+ * scheduled through AlarmManager for exact timing — without the permission
+ * the OS silently never fires them while the app is backgrounded/locked,
+ * which looks like "no beep, no vibration, no buttons". Callers should check
+ * this and send the user to the settings toggle; scheduling falls back to
+ * inexact (WorkManager) delivery in the meantime so alerts still arrive.
+ */
+export async function canUseExactAlarms(): Promise<boolean> {
+  try {
+    const settings = await notifee.getNotificationSettings();
+    return settings.android?.alarm === AndroidNotificationSetting.ENABLED;
+  } catch {
+    return true; // assume fine rather than nag on unexpected errors
+  }
+}
+
+export async function openAlarmSettings(): Promise<void> {
+  try {
+    await notifee.openAlarmPermissionSettings();
+  } catch {}
+}
+
 const ACTION_TITLES: Record<PhaseAction, string> = {
   [ACTION_DONE]: 'Done',
   [ACTION_NEXT_SET]: 'Start next set',
@@ -95,10 +121,14 @@ export async function scheduleAlert(
 ): Promise<string | null> {
   if (seconds <= 0) return null;
   try {
+    // Exact alarms need the "Alarms & reminders" permission; without it the
+    // trigger would never fire. Fall back to inexact scheduling (may be a
+    // little late under Doze, but it arrives).
+    const exact = await canUseExactAlarms();
     const trigger: TimestampTrigger = {
       type: TriggerType.TIMESTAMP,
       timestamp: Date.now() + Math.max(1, Math.round(seconds)) * 1000,
-      alarmManager: { allowWhileIdle: true },
+      ...(exact ? { alarmManager: { allowWhileIdle: true } } : {}),
     };
     await notifee.createTriggerNotification(
       {
@@ -108,6 +138,8 @@ export async function scheduleAlert(
         android: {
           channelId: CHANNEL_ALERTS,
           importance: AndroidImportance.HIGH,
+          category: AndroidCategory.ALARM,
+          lightUpScreen: true,
           color: ACCENT,
           visibility: AndroidVisibility.PUBLIC,
           autoCancel: true,
@@ -208,11 +240,12 @@ export async function ensureWeeklyExportReminder(
       next.setDate(next.getDate() + 7);
     }
 
+    const exact = await canUseExactAlarms();
     const trigger: TimestampTrigger = {
       type: TriggerType.TIMESTAMP,
       timestamp: next.getTime(),
       repeatFrequency: RepeatFrequency.WEEKLY,
-      alarmManager: { allowWhileIdle: true },
+      ...(exact ? { alarmManager: { allowWhileIdle: true } } : {}),
     };
     await notifee.createTriggerNotification(
       {

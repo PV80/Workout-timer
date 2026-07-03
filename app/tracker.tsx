@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -26,7 +26,7 @@ import {
   CaptureResult,
   CaptureSource,
 } from '../src/utils/trackerCapture';
-import { exportWeekFiles } from '../src/utils/exportWeek';
+import { exportCurrentWeek, exportWeekFiles } from '../src/utils/exportWeek';
 import { BodyweightEntry, TrackerEntry, TrackerExercise, TrackerSet } from '../src/types';
 
 /** Ask whether to use the camera or an existing photo, then run the chosen flow. */
@@ -239,15 +239,83 @@ export default function TrackerScreen() {
   const deleteBodyweight = useTrackerStore((s) => s.deleteBodyweight);
   const clearWeeksBefore = useTrackerStore((s) => s.clearWeeksBefore);
 
-  const [busy, setBusy] = useState<null | 'capturing' | 'weighing'>(null);
+  const [busy, setBusy] = useState<null | 'capturing' | 'weighing' | 'exporting'>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [weightDraft, setWeightDraft] = useState('');
+
+  // Friday flow: arriving with ?review=week means "check every day's entries
+  // (Edit fixes misreads), then export" — the export is the explicit last step.
+  const { review } = useLocalSearchParams<{ review?: string }>();
+  const [reviewMode, setReviewMode] = useState(false);
+  useEffect(() => {
+    if (review === 'week') setReviewMode(true);
+  }, [review]);
 
   const week = currentWeekKey();
   const thisWeek = useMemo(() => entries.filter((e) => e.weekKey === week), [entries, week]);
   const weekBw = useMemo(() => bodyweights.filter((b) => b.weekKey === week), [bodyweights, week]);
   const olderCount = entries.length - thisWeek.length + (bodyweights.length - weekBw.length);
+
+  // In review mode start with the newest page open so checking begins at once.
+  useEffect(() => {
+    if (reviewMode && thisWeek.length > 0) setExpandedId((cur) => cur ?? thisWeek[0].id);
+  }, [reviewMode]);
+
+  /** Final step of the Friday review: weigh-in check, then export fresh state. */
+  function handleReviewExport() {
+    const hasWeighIn = useTrackerStore.getState().bodyweights.some((b) => b.weekKey === week);
+    if (!hasWeighIn) {
+      Alert.alert(
+        'Weekly weigh-in missing',
+        'No bodyweight logged this week. Snap the scale, add it in the Bodyweight section above, or export without it.',
+        [
+          { text: 'Snap the scale', onPress: () => weighThenExport() },
+          { text: 'Export without it', onPress: () => runReviewExport() },
+          { text: 'Add it first', style: 'cancel' },
+        ],
+      );
+      return;
+    }
+    runReviewExport();
+  }
+
+  async function runReviewExport() {
+    setBusy('exporting');
+    try {
+      const result = await exportCurrentWeek();
+      if (result === 'nothing') {
+        Alert.alert('Nothing to export', 'No entries for this week yet.');
+        return;
+      }
+      if (typeof result === 'object') {
+        Alert.alert('Sharing unavailable', `Files written to:\n${result.savedTo}`);
+      }
+      setReviewMode(false);
+      Alert.alert('Week exported', 'CSV + JSON backup shared. Enjoy the weekend!', [
+        { text: 'Done', onPress: () => router.replace('/') },
+        { text: 'Stay here', style: 'cancel' },
+      ]);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function weighThenExport() {
+    promptCaptureSource(
+      async (source) => {
+        setBusy('weighing');
+        try {
+          if (handleBodyweightResult(await runBodyweightCapture(source))) {
+            await runReviewExport();
+          }
+        } finally {
+          setBusy((b) => (b === 'weighing' ? null : b));
+        }
+      },
+      { title: 'Log bodyweight', message: 'Photograph your scale now, or pick a photo you already took.' },
+    );
+  }
 
   async function exportWeek(toExport: TrackerEntry[], bw: BodyweightEntry[], label: string) {
     const result = await exportWeekFiles(toExport, bw, label);
@@ -343,6 +411,16 @@ export default function TrackerScreen() {
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 140 }}
         keyboardShouldPersistTaps="handled"
       >
+        {reviewMode && (
+          <View style={styles.reviewCard}>
+            <Text style={styles.reviewTitle}>Review before export</Text>
+            <Text style={styles.reviewBody}>
+              Check each day's card below — tap to expand, Edit to fix any misread weights or reps.
+              When it all looks right, hit Export at the bottom.
+            </Text>
+          </View>
+        )}
+
         {!apiKey && (
           <TouchableOpacity style={styles.warnCard} onPress={() => router.push('/settings')} activeOpacity={0.8}>
             <Text style={styles.warnTitle}>Add your Anthropic API key</Text>
@@ -511,26 +589,71 @@ export default function TrackerScreen() {
       </ScrollView>
 
       <View style={styles.ctaContainer}>
-        <TouchableOpacity
-          style={[styles.captureBtn, busy != null && styles.captureBtnBusy]}
-          onPress={handleCapture}
-          disabled={busy != null}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Capture tracker page"
-        >
-          {busy === 'capturing' ? (
-            <View style={styles.busyRow}>
-              <ActivityIndicator color="#000" />
-              <Text style={styles.captureText}>Reading page…</Text>
-            </View>
-          ) : (
-            <View style={styles.busyRow}>
-              <CameraIcon size={19} color="#000" />
-              <Text style={styles.captureText}>Capture page</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        {reviewMode ? (
+          <>
+            <TouchableOpacity
+              style={styles.captureAnotherBtn}
+              onPress={handleCapture}
+              disabled={busy != null}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Capture another page"
+            >
+              {busy === 'capturing' ? (
+                <View style={styles.busyRow}>
+                  <ActivityIndicator color="#888" />
+                  <Text style={styles.captureAnotherText}>Reading page…</Text>
+                </View>
+              ) : (
+                <View style={styles.busyRow}>
+                  <CameraIcon size={15} color="#888" />
+                  <Text style={styles.captureAnotherText}>Capture another page</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.captureBtn, busy != null && styles.captureBtnBusy]}
+              onPress={handleReviewExport}
+              disabled={busy != null}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Export the week"
+            >
+              {busy === 'exporting' ? (
+                <View style={styles.busyRow}>
+                  <ActivityIndicator color="#000" />
+                  <Text style={styles.captureText}>Exporting…</Text>
+                </View>
+              ) : (
+                <View style={styles.busyRow}>
+                  <DownloadIcon size={19} color="#000" />
+                  <Text style={styles.captureText}>Looks good — Export week</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </>
+        ) : (
+          <TouchableOpacity
+            style={[styles.captureBtn, busy != null && styles.captureBtnBusy]}
+            onPress={handleCapture}
+            disabled={busy != null}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Capture tracker page"
+          >
+            {busy === 'capturing' ? (
+              <View style={styles.busyRow}>
+                <ActivityIndicator color="#000" />
+                <Text style={styles.captureText}>Reading page…</Text>
+              </View>
+            ) : (
+              <View style={styles.busyRow}>
+                <CameraIcon size={19} color="#000" />
+                <Text style={styles.captureText}>Capture page</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -544,6 +667,13 @@ const styles = StyleSheet.create({
   },
   backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -10 },
   title: { flex: 1, fontSize: 18, fontWeight: '700', color: '#F0F0F0' },
+
+  reviewCard: {
+    backgroundColor: 'rgba(34,212,110,0.08)', borderWidth: 1, borderColor: 'rgba(34,212,110,0.35)',
+    borderRadius: 12, padding: 16, marginTop: 12,
+  },
+  reviewTitle: { fontSize: 14, fontWeight: '700', color: '#22D46E' },
+  reviewBody: { fontSize: 13, color: '#888', marginTop: 6, lineHeight: 19 },
 
   warnCard: {
     backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)',
@@ -641,7 +771,12 @@ const styles = StyleSheet.create({
   },
   exportText: { fontSize: 15, fontWeight: '600', color: '#888' },
 
-  ctaContainer: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 16, paddingBottom: 32 },
+  ctaContainer: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 16, paddingBottom: 32, gap: 10 },
+  captureAnotherBtn: {
+    height: 44, borderRadius: 12, borderWidth: 1.5, borderColor: '#262626',
+    alignItems: 'center', justifyContent: 'center', backgroundColor: '#0A0A0A',
+  },
+  captureAnotherText: { color: '#888', fontSize: 14, fontWeight: '600' },
   captureBtn: {
     height: 64, borderRadius: 16, backgroundColor: '#22D46E',
     alignItems: 'center', justifyContent: 'center',

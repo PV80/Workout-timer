@@ -1,14 +1,14 @@
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity,
+  ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity,
   useWindowDimensions, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraIcon, CheckIcon, DownloadIcon } from '../src/components/icons';
 import { useHistoryStore } from '../src/store/historyStore';
 import { useTrackerStore, currentWeekKey } from '../src/store/trackerStore';
-import { exportWeekFiles } from '../src/utils/exportWeek';
+import { exportCurrentWeek } from '../src/utils/exportWeek';
 import { formatHoursMinutes } from '../src/utils/time';
 import { runBodyweightCapture, runTrackerCapture } from '../src/utils/trackerCapture';
 import { handleBodyweightResult, handleCaptureResult, promptCaptureSource } from './tracker';
@@ -19,28 +19,22 @@ export default function CompleteScreen() {
   const sessions = useHistoryStore((s) => s.sessions);
   const latest = sessions[0] ?? null;
   const addBodyweight = useTrackerStore((s) => s.addBodyweight);
-  const trackerEntries = useTrackerStore((s) => s.entries);
-  const bodyweights = useTrackerStore((s) => s.bodyweights);
   const lastExportWeekKey = useTrackerStore((s) => s.lastExportWeekKey);
   const [capturing, setCapturing] = useState(false);
   const [weighing, setWeighing] = useState(false);
   const [weightDraft, setWeightDraft] = useState('');
   const [weightSaved, setWeightSaved] = useState(false);
   const [exported, setExported] = useState(false);
-  const [pageLogged, setPageLogged] = useState(false);
-  const [bwModalVisible, setBwModalVisible] = useState(false);
-
   const isMonday = latest?.day === 'monday';
-  // Friday is the last training day of the week — offer the weekly export
-  // right here so it isn't forgotten over the weekend.
+  // Friday is the last training day of the week — logging the page routes to
+  // the Tracker in review mode so misreads can be amended BEFORE the export.
   const week = currentWeekKey();
   const isFriday = latest?.day === 'friday';
   const weekExported = exported || lastExportWeekKey === week;
 
   async function exportThisWeek() {
-    const entries = trackerEntries.filter((e) => e.weekKey === week);
-    const bw = bodyweights.filter((b) => b.weekKey === week);
-    const result = await exportWeekFiles(entries, bw, week);
+    // Read fresh state inside the util — never from this render's props.
+    const result = await exportCurrentWeek();
     if (result === 'nothing') {
       Alert.alert(
         'Nothing to export yet',
@@ -54,28 +48,6 @@ export default function CompleteScreen() {
     setExported(true);
   }
 
-  /**
-   * Friday: the page has just been logged — the week is complete. If there's
-   * no weigh-in yet this week, prompt for it first (typed or from a scale
-   * photo), then run the export directly. No extra taps to remember.
-   */
-  function fridayWrapUp() {
-    const hasWeighIn = weightSaved || bodyweights.some((b) => b.weekKey === week);
-    if (!hasWeighIn) {
-      Alert.alert(
-        'Weekly weigh-in missing',
-        'No bodyweight logged this week — add it so it lands in the CSV, or export without it.',
-        [
-          { text: 'Type it', onPress: () => setBwModalVisible(true) },
-          { text: 'Snap the scale', onPress: () => weighByPhoto(exportThisWeek) },
-          { text: 'Export without it', onPress: () => exportThisWeek() },
-        ],
-      );
-      return;
-    }
-    exportThisWeek();
-  }
-
   function capturePage() {
     promptCaptureSource(async (source) => {
       setCapturing(true);
@@ -83,13 +55,9 @@ export default function CompleteScreen() {
         const result = await runTrackerCapture(source);
         const saved = handleCaptureResult(result);
         if (saved) {
-          if (isFriday) {
-            // Stay here: the wrap-up (weigh-in prompt + export) runs now.
-            setPageLogged(true);
-            fridayWrapUp();
-          } else {
-            router.replace('/tracker');
-          }
+          // Friday: land in review mode — check/amend the week's entries,
+          // then the export runs from there (with the weigh-in prompt).
+          router.replace(isFriday ? '/tracker?review=week' : '/tracker');
         }
       } finally {
         setCapturing(false);
@@ -108,20 +76,7 @@ export default function CompleteScreen() {
     setWeightDraft('');
   }
 
-  async function saveWeightFromModal() {
-    const kg = parseFloat(weightDraft.replace(',', '.'));
-    if (!Number.isFinite(kg) || kg <= 0 || kg > 500) {
-      Alert.alert('Enter a weight', 'Type your bodyweight in kg, e.g. 82.5');
-      return;
-    }
-    await addBodyweight(kg);
-    setWeightSaved(true);
-    setWeightDraft('');
-    setBwModalVisible(false);
-    await exportThisWeek();
-  }
-
-  function weighByPhoto(onSaved?: () => void) {
+  function weighByPhoto() {
     promptCaptureSource(
       async (source) => {
         setWeighing(true);
@@ -129,7 +84,6 @@ export default function CompleteScreen() {
           if (handleBodyweightResult(await runBodyweightCapture(source))) {
             setWeightSaved(true);
             setWeightDraft('');
-            onSaved?.();
           }
         } finally {
           setWeighing(false);
@@ -207,8 +161,8 @@ export default function CompleteScreen() {
             ) : (
               <>
                 <Text style={styles.exportHint}>
-                  Friday's the last session of the week — logging the tracker page below runs the
-                  weekly export automatically. Logged it already? Export manually:
+                  Friday's the last session of the week — logging the tracker page below takes you
+                  to review the week's entries, then export. Or export directly:
                 </Text>
                 <TouchableOpacity
                   style={styles.exportWeekBtn}
@@ -278,99 +232,35 @@ export default function CompleteScreen() {
       </ScrollView>
 
       <View style={styles.ctaContainer}>
-        {pageLogged ? (
-          <TouchableOpacity
-            style={styles.doneBtn}
-            onPress={() => router.replace('/')}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Done"
-          >
+        <TouchableOpacity
+          style={[styles.doneBtn, capturing && styles.btnBusy]}
+          onPress={capturePage}
+          disabled={capturing}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Log tracker page"
+        >
+          {capturing ? (
             <View style={styles.busyRow}>
-              <CheckIcon size={19} color="#000" strokeWidth={3} />
-              <Text style={styles.doneBtnText}>DONE</Text>
+              <ActivityIndicator color="#000" />
+              <Text style={styles.doneBtnText}>Reading page…</Text>
             </View>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[styles.doneBtn, capturing && styles.btnBusy]}
-            onPress={capturePage}
-            disabled={capturing}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Log tracker page"
-          >
-            {capturing ? (
-              <View style={styles.busyRow}>
-                <ActivityIndicator color="#000" />
-                <Text style={styles.doneBtnText}>Reading page…</Text>
-              </View>
-            ) : (
-              <View style={styles.busyRow}>
-                <CameraIcon size={19} color="#000" />
-                <Text style={styles.doneBtnText}>Log tracker page</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        )}
+          ) : (
+            <View style={styles.busyRow}>
+              <CameraIcon size={19} color="#000" />
+              <Text style={styles.doneBtnText}>Log tracker page</Text>
+            </View>
+          )}
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.secondaryBtn}
-          onPress={() => router.replace(pageLogged ? '/tracker' : '/')}
+          onPress={() => router.replace('/')}
           activeOpacity={0.7}
           disabled={capturing}
         >
-          <Text style={styles.secondaryText}>
-            {pageLogged ? 'View tracker' : 'Skip — back to home'}
-          </Text>
+          <Text style={styles.secondaryText}>Skip — back to home</Text>
         </TouchableOpacity>
       </View>
-
-      {/* Friday: typed weigh-in prompt shown between page capture and export. */}
-      <Modal
-        visible={bwModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setBwModalVisible(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.bwTitle}>Weekly weigh-in</Text>
-            <View style={styles.bwRow}>
-              <TextInput
-                style={styles.bwInput}
-                value={weightDraft}
-                onChangeText={setWeightDraft}
-                placeholder="e.g. 82.5"
-                placeholderTextColor="#555"
-                keyboardType="decimal-pad"
-                returnKeyType="done"
-                autoFocus
-                onSubmitEditing={saveWeightFromModal}
-              />
-              <Text style={styles.bwUnit}>kg</Text>
-              <TouchableOpacity
-                style={styles.bwAddBtn}
-                onPress={saveWeightFromModal}
-                accessibilityRole="button"
-                accessibilityLabel="Save weight and export"
-              >
-                <Text style={styles.bwAddText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              style={styles.modalSkip}
-              onPress={() => {
-                setBwModalVisible(false);
-                exportThisWeek();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Skip weigh-in and export"
-            >
-              <Text style={styles.modalSkipText}>Skip — export without weight</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -450,15 +340,5 @@ const styles = StyleSheet.create({
   busyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   secondaryBtn: { height: 48, alignItems: 'center', justifyContent: 'center' },
 
-  modalBackdrop: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
-    alignItems: 'center', justifyContent: 'center', padding: 24,
-  },
-  modalCard: {
-    width: '100%', maxWidth: 420, borderRadius: 16, padding: 20,
-    backgroundColor: '#151515', borderWidth: 1, borderColor: '#2A2A2A',
-  },
-  modalSkip: { marginTop: 14, alignItems: 'center' },
-  modalSkipText: { fontSize: 13, color: '#888', fontWeight: '600' },
   secondaryText: { color: '#888', fontSize: 15, fontWeight: '600' },
 });

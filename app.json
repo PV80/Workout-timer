@@ -34,7 +34,8 @@
         {
           "cameraPermission": "Allow $(PRODUCT_NAME) to photograph your handwritten workout tracker page."
         }
-      ]
+      ],
+      "./plugins/withCropActivityInsets"
     ],
     "experiments": {
       "typedRoutes": true

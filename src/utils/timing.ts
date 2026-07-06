@@ -1,4 +1,18 @@
-import { AdaptedTiming, Exercise, ExerciseType, TimingRecord, UserSettings, WorkoutDay } from '../types';
+import {
+  AdaptedTiming,
+  Exercise,
+  ExerciseType,
+  SetRecord,
+  TimerPhase,
+  TimingRecord,
+  UserSettings,
+  WorkoutDay,
+} from '../types';
+
+// Nominal seconds assumed for an AMRAP (to-failure) set when projecting — it
+// has no fixed target, so we can't measure pace on it, but it still consumes
+// time that belongs in the estimate.
+const AMRAP_NOMINAL_SET = 45;
 
 export const DEFAULT_SETTINGS: UserSettings = {
   tier1SetDuration: 60,
@@ -85,11 +99,128 @@ export function estimateTotalDuration(
   for (const ex of workout.exercises) {
     if (ex.type === 'CARDIO') continue;
     const timing = getAdaptedTiming(ex.id, ex.type, allRecords, settings);
-    const setDur = ex.type === 'AMRAP' ? 45 : (timing.setDuration ?? 45);
+    const setDur = ex.type === 'AMRAP' ? AMRAP_NOMINAL_SET : (timing.setDuration ?? AMRAP_NOMINAL_SET);
     // transition (setup) before every exercise except the first
     if (seenFirst) total += getAdaptedTransition(ex.id, allRecords, settings);
     total += ex.sets * setDur + (ex.sets - 1) * timing.breakDuration;
     seenFirst = true;
   }
   return total;
+}
+
+function setDurationOf(ex: Exercise, timing: AdaptedTiming): number {
+  return ex.type === 'AMRAP' ? AMRAP_NOMINAL_SET : (timing.setDuration ?? AMRAP_NOMINAL_SET);
+}
+
+export interface LiveEstimateInput {
+  workout: WorkoutDay;
+  /** This session's completed set records (carry predicted + actual). */
+  setRecords: SetRecord[];
+  currentExerciseIndex: number;
+  currentSetNumber: number;
+  currentPhase: TimerPhase;
+  /** Seconds elapsed in the current phase (pause-aware). */
+  currentPhaseElapsed: number;
+  /** The current phase's target countdown (break/transition), if any. */
+  currentTargetDuration: number | null;
+  /** Whole-session elapsed wall-clock seconds. */
+  elapsedSeconds: number;
+  allRecords: TimingRecord[];
+  settings: UserSettings;
+}
+
+export interface LiveEstimate {
+  /** Projected total workout duration, seconds. */
+  totalSeconds: number;
+  /** Observed pace vs. baseline: >1 slower than expected, <1 faster. */
+  paceFactor: number;
+}
+
+/**
+ * Live projection of the whole workout's duration, from start to finish, that
+ * reacts to how fast you're actually moving. It measures the session's pace
+ * from completed sets/breaks (actual ÷ predicted, from the records already
+ * being written on every DONE) and applies that factor to the estimated time
+ * still remaining. The pace only earns trust as sets accumulate, so the number
+ * starts at the plain baseline estimate and tightens as the session goes on —
+ * letting you see whether you need to pick it up to hit your target.
+ */
+export function estimateLiveTotalDuration(input: LiveEstimateInput): LiveEstimate | null {
+  const {
+    workout, setRecords, currentExerciseIndex, currentSetNumber, currentPhase,
+    currentPhaseElapsed, currentTargetDuration, elapsedSeconds, allRecords, settings,
+  } = input;
+
+  const exercises = workout.exercises;
+  const currentEx = exercises[currentExerciseIndex];
+  if (!currentEx || currentPhase === 'idle') return null;
+
+  // ── Pace factor from completed work this session ──────────────────────────
+  let actualSum = 0;
+  let predictedSum = 0;
+  let completedSets = 0;
+  for (const r of setRecords) {
+    if (r.actualSetDuration != null && r.predictedSetDuration != null) {
+      actualSum += r.actualSetDuration;
+      predictedSum += r.predictedSetDuration;
+      completedSets++;
+    }
+    // Count a break only where one actually happened (last set of an exercise
+    // has a transition instead, recorded as a 0 break).
+    if (r.actualBreakDuration > 0 && r.predictedBreakDuration != null) {
+      actualSum += r.actualBreakDuration;
+      predictedSum += r.predictedBreakDuration;
+    }
+  }
+  let paceFactor = 1;
+  if (predictedSum > 0 && completedSets >= 1) {
+    const raw = actualSum / predictedSum;
+    const confidence = Math.min(1, completedSets / 3); // full trust after ~3 sets
+    paceFactor = 1 + (raw - 1) * confidence;
+    paceFactor = Math.max(0.6, Math.min(1.8, paceFactor));
+  }
+
+  // ── Time left in the current phase (unscaled — it's already underway) ─────
+  const currentTiming = getAdaptedTiming(currentEx.id, currentEx.type, allRecords, settings);
+  const currentSetDur = setDurationOf(currentEx, currentTiming);
+  let currentRemaining = 0;
+  if (currentPhase === 'set' || currentPhase === 'timed') {
+    currentRemaining = Math.max(0, currentSetDur - currentPhaseElapsed);
+  } else if (currentPhase === 'amrap') {
+    currentRemaining = Math.max(0, AMRAP_NOMINAL_SET - currentPhaseElapsed);
+  } else if (currentPhase === 'break' || currentPhase === 'transition') {
+    currentRemaining = Math.max(0, (currentTargetDuration ?? 0) - currentPhaseElapsed);
+  }
+
+  // ── Baseline of everything after the current phase ────────────────────────
+  let future = 0;
+  if (currentEx.type !== 'CARDIO') {
+    const brk = currentTiming.breakDuration;
+    if (currentPhase === 'set' || currentPhase === 'timed' || currentPhase === 'amrap') {
+      const remainingSets = Math.max(0, currentEx.sets - currentSetNumber);
+      future += remainingSets * (brk + currentSetDur);
+    } else if (currentPhase === 'break') {
+      const remainingSets = Math.max(0, currentEx.sets - currentSetNumber);
+      future += remainingSets * currentSetDur + Math.max(0, remainingSets - 1) * brk;
+    }
+    // 'transition' → the current exercise is fully done; nothing more from it.
+  }
+  let firstUpcoming = true;
+  for (let i = currentExerciseIndex + 1; i < exercises.length; i++) {
+    const ex = exercises[i];
+    if (ex.type === 'CARDIO') continue;
+    const t = getAdaptedTiming(ex.id, ex.type, allRecords, settings);
+    const setDur = setDurationOf(ex, t);
+    const body = ex.sets * setDur + (ex.sets - 1) * t.breakDuration;
+    // The transition into the very next exercise is skipped if we're already
+    // in it (currentPhase === 'transition').
+    const transition = firstUpcoming && currentPhase === 'transition'
+      ? 0
+      : getAdaptedTransition(ex.id, allRecords, settings);
+    future += transition + body;
+    firstUpcoming = false;
+  }
+
+  const totalSeconds = elapsedSeconds + currentRemaining + paceFactor * future;
+  return { totalSeconds, paceFactor };
 }

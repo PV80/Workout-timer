@@ -25,6 +25,7 @@ import { useHistoryStore } from '../../src/store/historyStore';
 import { useWorkoutStore, getNextExercise } from '../../src/store/workoutStore';
 import { useTimer } from '../../src/hooks/useTimer';
 import { useWorkoutDuration } from '../../src/hooks/useWorkoutDuration';
+import { estimateLiveTotalDuration } from '../../src/utils/timing';
 import { formatTime, formatElapsed } from '../../src/utils/time';
 import { stopAlert } from '../../src/utils/alertService';
 import {
@@ -98,6 +99,7 @@ export default function WorkoutScreen() {
 
   const store = useWorkoutStore();
   const settings = useHistoryStore((s) => s.settings);
+  const timingRecords = useHistoryStore((s) => s.timingRecords);
 
   const {
     activeWorkout,
@@ -211,6 +213,34 @@ export default function WorkoutScreen() {
 
   const progressBarWidth = `${(duration.progressToTarget * 100).toFixed(0)}%`;
 
+  // Live projected finish, reacting to the session's pace. Recomputes each
+  // render (the duration hook ticks ~1/s), so it tightens as sets complete.
+  const liveEstimate = estimateLiveTotalDuration({
+    workout: activeWorkout,
+    setRecords: store.setRecords,
+    currentExerciseIndex,
+    currentSetNumber,
+    currentPhase: currentPhase as any,
+    currentPhaseElapsed: elapsed,
+    currentTargetDuration: targetDuration,
+    elapsedSeconds: duration.elapsedSeconds,
+    allRecords: timingRecords,
+    settings,
+  });
+  const etaColor = (() => {
+    if (!liveEstimate) return '#888';
+    if (liveEstimate.totalSeconds >= settings.warningWorkoutMinutes * 60) return '#EF4444';
+    if (liveEstimate.totalSeconds >= settings.targetWorkoutMinutes * 60) return '#F59E0B';
+    return '#22D46E';
+  })();
+  const etaText = (() => {
+    if (!liveEstimate) return '';
+    const totalMin = Math.round(liveEstimate.totalSeconds / 60);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  })();
+
   const setProgressLabel = (() => {
     const repsLabel = exercise.type === 'AMRAP' ? 'to failure' : exercise.reps;
     return `SET ${currentSetNumber} OF ${exercise.sets}  ·  ${repsLabel}`;
@@ -308,9 +338,18 @@ export default function WorkoutScreen() {
         >
           <XIcon size={20} color="#888" />
         </TouchableOpacity>
-        <Text style={[styles.elapsed, { color: elapsedColor }]}>
-          {formatElapsed(duration.elapsedSeconds)}
-        </Text>
+        <View style={styles.clockBlock}>
+          <Text style={[styles.elapsed, { color: elapsedColor }]}>
+            {formatElapsed(duration.elapsedSeconds)}
+          </Text>
+          {liveEstimate ? (
+            <Text style={[styles.eta, { color: etaColor }]} numberOfLines={1}>
+              ≈ {etaText} total
+            </Text>
+          ) : (
+            <Text style={styles.etaLabel}>elapsed</Text>
+          )}
+        </View>
         <TouchableOpacity
           style={styles.headerBtn}
           onPress={handleTogglePause}
@@ -323,7 +362,7 @@ export default function WorkoutScreen() {
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: progressBarWidth as any }]} />
           </View>
-          <Text style={styles.targetLabel}>{settings.targetWorkoutMinutes}m</Text>
+          <Text style={styles.targetLabel}>target {settings.targetWorkoutMinutes}m</Text>
         </View>
       </View>
 
@@ -398,7 +437,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingTop: 8,
   },
   headerBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  elapsed: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  clockBlock: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  elapsed: { textAlign: 'center', fontSize: 17, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  eta: { marginTop: 1, fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  etaLabel: { marginTop: 1, fontSize: 10, color: '#666', textTransform: 'uppercase', letterSpacing: 1 },
   progressArea: { alignItems: 'flex-end', gap: 4, marginLeft: 8 },
   progressTrack: { width: 64, height: 4, borderRadius: 2, backgroundColor: '#1C1C1C', overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: '#22D46E', borderRadius: 2 },

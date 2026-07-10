@@ -240,6 +240,13 @@ export default function WorkoutScreen() {
     const m = totalMin % 60;
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
   })();
+  // Third clock: the projected finish as a wall-clock time — "done at 2:47 PM".
+  // Session start + projected total = the phone-clock moment you'll walk out.
+  const finishClock = (() => {
+    if (!liveEstimate || !sessionStartedAt) return '';
+    return new Date(sessionStartedAt + liveEstimate.totalSeconds * 1000)
+      .toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  })();
 
   const setProgressLabel = (() => {
     const repsLabel = exercise.type === 'AMRAP' ? 'to failure' : exercise.reps;
@@ -344,7 +351,7 @@ export default function WorkoutScreen() {
           </Text>
           {liveEstimate ? (
             <Text style={[styles.eta, { color: etaColor }]} numberOfLines={1}>
-              ≈ {etaText} total
+              ≈ {etaText} · done {finishClock}
             </Text>
           ) : (
             <Text style={styles.etaLabel}>elapsed</Text>

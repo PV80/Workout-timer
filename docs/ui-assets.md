@@ -28,3 +28,7 @@ Three original vector designs are supplied as real SVG files in `assets/buttons`
 Timer-only and unmatched session records now appear in CSV. Exact exercise names outrank fuzzy matches, and ambiguous matches remain separate. Prior-week exports and failed sharing no longer mark the current week exported. A cache-only export does not authorize clearing old tracker data. Tracker saves are serialized and state changes only after successful writes; failed hydration cannot silently open an empty tracker. Clearing previous weeks preserves future-dated entries. Incomplete or malformed backups are rejected before any writes, and restore is blocked while a workout is active.
 
 Backup restoration still uses AsyncStorage.multiSet, which is not a cross-key transaction. The app also cannot detect whether a recipient saved a file after Android closes its share sheet. These are known platform limits, not claims of complete failure-proof storage.
+
+## App icon
+
+The 1.1.0 release uses a generated emerald stopwatch-and-dumbbell identity: an opaque legacy icon and a transparent adaptive foreground, each 1024 × 1024. Android adaptive and splash backgrounds match #0B1010. The adaptive foreground retains safe margins so the emblem survives launcher masking. Version code 2 is an update to the existing package, `com.briangitau.workouttimer`; signing remains unchanged. The old placeholder generator now refuses to overwrite production artwork.

@@ -2,7 +2,7 @@
 """Generate placeholder app icons using only Python stdlib.
 
 Produces a 1024x1024 PNG with a dark background and a green circle.
-Used for adaptive-icon.png and icon.png until real artwork lands.
+Legacy placeholder generator retained for reference. Production artwork must not be overwritten.
 """
 import os
 import struct
@@ -54,6 +54,9 @@ def write_png(path: Path):
 
 if __name__ == "__main__":
     root = Path(__file__).resolve().parent.parent / "assets"
+    if any((root / name).exists() for name in ["icon.png", "adaptive-icon.png", "splash.png"]):
+        raise SystemExit("Refusing to overwrite production artwork. Use the checked-in generated icons.")
     write_png(root / "icon.png")
     write_png(root / "adaptive-icon.png")
     write_png(root / "splash.png")
+

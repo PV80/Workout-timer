@@ -42,8 +42,9 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         settings: settingsRaw ? { ...DEFAULT_SETTINGS, ...JSON.parse(settingsRaw) } : DEFAULT_SETTINGS,
         hydrated: true,
       });
-    } catch {
-      set({ hydrated: true });
+    } catch (error) {
+      // Startup must not overwrite history that failed to load.
+      throw error;
     }
   },
 
@@ -54,7 +55,8 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   },
 
   async saveSession(session) {
-    const next = [session, ...get().sessions];
+    // Retrying a completed checkpoint after process death must not duplicate it.
+    const next = [session, ...get().sessions.filter((s) => s.id !== session.id)];
     set({ sessions: next });
     await AsyncStorage.setItem(KEYS.sessionHistory, JSON.stringify(next));
   },

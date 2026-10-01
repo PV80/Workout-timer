@@ -12,7 +12,7 @@ export const WORKOUTS: Record<string, WorkoutDay> = {
       { id: 'landmine-chest', name: 'Landmine Chest Press',        type: 'STANDARD', sets: 3, reps: '12' },
       { id: 'barbell-curls',  name: 'Standing Barbell Curls',      type: 'STANDARD', sets: 4, reps: '10' },
       { id: 'preacher-curls', name: 'Preacher Curls',              type: 'STANDARD', sets: 3, reps: '12' },
-      { id: 'leg-raises',     name: 'Leg Raises',                  type: 'STANDARD', sets: 3, reps: '15' },
+      { id: 'leg-raises',     name: 'Hanging Leg Raises',                  type: 'STANDARD', sets: 3, reps: '15' },
       { id: 'ab-roller',      name: 'Ab Roller',                   type: 'AMRAP',    sets: 3, reps: 'Failure' },
     ],
   },
@@ -80,3 +80,4 @@ export function getNextWorkout(): WorkoutDay | null {
   }
   return null;
 }
+

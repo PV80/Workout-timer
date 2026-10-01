@@ -1,6 +1,9 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useMotionEnabled } from './Motion';
+import { theme } from '../theme';
 import Animated, {
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -13,13 +16,16 @@ interface Props {
   totalSets: number;
   currentSet: number;
   completedSets: number;
+  paused?: boolean;
 }
 
 function PulsingDot({ active }: { active: boolean }) {
+  const motion = useMotionEnabled();
   const scale = useSharedValue(1);
 
   useEffect(() => {
-    if (active) {
+    cancelAnimation(scale);
+    if (active && motion) {
       scale.value = withRepeat(
         withSequence(
           withTiming(1.18, { duration: 800 }),
@@ -31,7 +37,8 @@ function PulsingDot({ active }: { active: boolean }) {
     } else {
       scale.value = 1;
     }
-  }, [active]);
+    return () => cancelAnimation(scale);
+  }, [active, motion, scale]);
 
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
@@ -46,17 +53,16 @@ function PulsingDot({ active }: { active: boolean }) {
   );
 }
 
-export function SetDots({ totalSets, currentSet, completedSets }: Props) {
+export function SetDots({ totalSets, currentSet, completedSets, paused = false }: Props) {
   return (
-    <View style={styles.row}>
+    <View style={styles.row} accessible accessibilityLabel={`Set ${currentSet} of ${totalSets}`}>
       {Array.from({ length: totalSets }).map((_, i) => {
         const setNum = i + 1;
         const isCompleted = setNum <= completedSets;
         const isCurrent = setNum === currentSet;
-        const isRemaining = setNum > currentSet;
 
         if (isCurrent) {
-          return <PulsingDot key={i} active />;
+          return <PulsingDot key={i} active={!paused} />;
         }
         return (
           <View
@@ -80,18 +86,19 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 24,
+    height: 5,
+    borderRadius: 3,
   },
   dotCompleted: {
-    backgroundColor: '#22D46E',
+    backgroundColor: theme.green,
   },
   dotCurrent: {
-    backgroundColor: '#22D46E',
+    backgroundColor: theme.green,
   },
   dotRemaining: {
     borderWidth: 1.5,
-    borderColor: '#262626',
+    borderColor: theme.border,
   },
 });
+

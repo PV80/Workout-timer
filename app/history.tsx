@@ -1,3 +1,6 @@
+import { ArtworkHero } from '../src/components/ArtworkHero';
+import { PageHeader } from '../src/components/PageHeader';
+import { theme } from '../src/theme';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { LayoutAnimation, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, UIManager, View } from 'react-native';
@@ -49,19 +52,11 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <ChevronLeftIcon size={24} color="#888" />
-        </TouchableOpacity>
-        <Text style={styles.title}>HISTORY</Text>
-      </View>
+      <PageHeader title="History" subtitle="Every session, recorded." />
 
       <ScrollView>
+        <ArtworkHero kind="history" label="YOUR PROGRESS" title="Effort adds up." subtitle="Your sessions, one step at a time." compact inset={true} />
+
         {sessions.length === 0 && (
           <View style={styles.empty}>
             <Text style={styles.emptyText}>No workouts yet. Complete your first session to see it here.</Text>
@@ -111,7 +106,7 @@ export default function HistoryScreen() {
                   >
                     <View style={styles.collapseRow}>
                       <Text style={styles.collapseText}>Collapse</Text>
-                      <ChevronUpIcon size={13} color="#888" />
+                      <ChevronUpIcon size={13} color={theme.muted} />
                     </View>
                   </TouchableOpacity>
                 </View>
@@ -126,36 +121,37 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#0A0A0A' },
+  screen: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4,
   },
   backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -10 },
-  title: { flex: 1, fontSize: 18, fontWeight: '700', color: '#F0F0F0' },
+  title: { flex: 1, fontSize: 18, fontWeight: '700', color: theme.text },
 
   empty: { padding: 40, alignItems: 'center' },
-  emptyText: { fontSize: 14, color: '#888', textAlign: 'center', lineHeight: 22 },
+  emptyText: { fontSize: 14, color: theme.muted, textAlign: 'center', lineHeight: 22 },
 
-  row: { paddingHorizontal: 24, paddingVertical: 16, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  rowExpanded: { backgroundColor: '#111111' },
+  row: { marginHorizontal: 20, marginTop: 10, backgroundColor: theme.surface, borderRadius: 18, borderWidth: 1, borderColor: theme.border, paddingHorizontal: 18, paddingVertical: 18, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  rowExpanded: { backgroundColor: theme.surface },
   rowLeft: { flex: 1 },
   rowMeta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  dayBadge: { backgroundColor: '#1C1C1C', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
-  dayBadgeText: { color: '#888', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-  dateText: { fontSize: 13, color: '#888' },
-  muscleText: { fontSize: 12, color: '#888', marginTop: 6 },
+  dayBadge: { backgroundColor: theme.raised, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  dayBadgeText: { color: theme.muted, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  dateText: { fontSize: 13, color: theme.muted },
+  muscleText: { fontSize: 12, color: theme.muted, marginTop: 6 },
   rowRight: { alignItems: 'flex-end' },
-  durationText: { fontSize: 20, fontWeight: '800', color: '#F0F0F0' },
-  setsText: { fontSize: 12, color: '#888', marginTop: 2 },
+  durationText: { fontSize: 20, fontWeight: '800', color: theme.text },
+  setsText: { fontSize: 12, color: theme.muted, marginTop: 2 },
 
-  detail: { backgroundColor: '#111', paddingHorizontal: 24, paddingVertical: 8 },
+  detail: { marginHorizontal: 20, backgroundColor: theme.surface, borderRadius: 18, paddingHorizontal: 18, paddingVertical: 12 },
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
-  detailName: { fontSize: 13, color: '#888', flex: 1 },
-  detailStat: { fontSize: 12, color: '#888' },
+  detailName: { fontSize: 13, color: theme.muted, flex: 1 },
+  detailStat: { fontSize: 12, color: theme.muted },
   collapseBtn: { paddingTop: 8, alignItems: 'center' },
   collapseRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  collapseText: { fontSize: 12, color: '#888' },
+  collapseText: { fontSize: 12, color: theme.muted },
 
-  divider: { height: 1, backgroundColor: '#1A1A1A' },
+  divider: { height: 4 },
 });
+

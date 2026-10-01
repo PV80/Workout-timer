@@ -1,8 +1,10 @@
 {
   "name": "workout-timer",
   "version": "1.0.0",
-  "main": "expo-router/entry",
+  "main": "index.js",
   "scripts": {
+    "test": "node tests/workoutRecovery.test.cjs && node tests/exerciseMotion.test.cjs && node tests/dataIntegrity.test.cjs",
+    "typecheck": "tsc --noEmit",
     "start": "expo start",
     "android": "expo run:android",
     "build:android": "expo prebuild --platform android && cd android && ./gradlew assembleRelease",

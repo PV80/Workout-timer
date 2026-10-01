@@ -1,3 +1,7 @@
+import { ActionGlyph } from '../src/components/ActionGlyph';
+import { ArtworkHero } from '../src/components/ArtworkHero';
+import { PageHeader } from '../src/components/PageHeader';
+import { theme } from '../src/theme';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -58,9 +62,9 @@ function SegmentedControl({
 
 const sc = StyleSheet.create({
   container: { flexDirection: 'row', height: 40, borderRadius: 8, overflow: 'hidden' },
-  segment: { flex: 1, backgroundColor: '#1C1C1C', alignItems: 'center', justifyContent: 'center' },
-  segmentActive: { backgroundColor: '#22D46E' },
-  segmentText: { fontSize: 13, color: '#888' },
+  segment: { flex: 1, backgroundColor: theme.raised, alignItems: 'center', justifyContent: 'center' },
+  segmentActive: { backgroundColor: theme.green },
+  segmentText: { fontSize: 13, color: theme.muted },
   segmentTextActive: { color: '#000', fontWeight: '700' },
 });
 
@@ -82,7 +86,7 @@ function ApiKeyField() {
             value={draft}
             onChangeText={setDraft}
             placeholder="sk-ant-…"
-            placeholderTextColor="#555"
+            placeholderTextColor={theme.subtle}
             autoCapitalize="none"
             autoCorrect={false}
             secureTextEntry
@@ -90,7 +94,7 @@ function ApiKeyField() {
           <View style={styles.keyBtnRow}>
             <TouchableOpacity
               style={[styles.keyBtn, styles.keyBtnPrimary]}
-              onPress={async () => { await setApiKey(draft); setEditing(false); }}
+              onPress={async () => { try { await setApiKey(draft); setEditing(false); } catch { Alert.alert('Key not saved', 'Please retry saving your API key.'); } }}
             >
               <Text style={styles.keyBtnPrimaryText}>Save</Text>
             </TouchableOpacity>
@@ -178,17 +182,7 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <ChevronLeftIcon size={24} color="#888" />
-        </TouchableOpacity>
-        <Text style={styles.title}>SETTINGS</Text>
-      </View>
+      <PageHeader title="Settings" subtitle="Your timer. Your pace." />
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
@@ -208,9 +202,9 @@ export default function SettingsScreen() {
                 maximumValue={cfg.max}
                 step={cfg.step}
                 value={rawValue}
-                minimumTrackTintColor="#22D46E"
-                maximumTrackTintColor="#262626"
-                thumbTintColor="#22D46E"
+                minimumTrackTintColor={theme.green}
+                maximumTrackTintColor={theme.border}
+                thumbTintColor={theme.green}
                 onSlidingComplete={(v) => updateSettings({ [cfg.key]: v })}
               />
             </View>
@@ -245,11 +239,13 @@ export default function SettingsScreen() {
 
         <ApiKeyField />
 
+        <ArtworkHero kind="backup" label="YOUR RECORDS" title="Keep a copy." subtitle="Back up your week before updating." compact inset={false} />
+
         <Text style={styles.sectionLabel}>Data</Text>
 
         <TouchableOpacity style={styles.card} onPress={handleBackupNow} activeOpacity={0.7}>
           <View style={styles.dataRow}>
-            <DownloadIcon size={17} color="#22D46E" />
+            <ActionGlyph kind="export" size={26} />
             <Text style={styles.dataLabel}>Back up now (JSON)</Text>
           </View>
           <Text style={styles.hint}>
@@ -259,7 +255,7 @@ export default function SettingsScreen() {
 
         <TouchableOpacity style={styles.card} onPress={handleRestore} activeOpacity={0.7}>
           <View style={styles.dataRow}>
-            <UploadIcon size={17} color="#F59E0B" />
+            <UploadIcon size={17} color={theme.amber} />
             <Text style={styles.dataLabel}>Restore from backup</Text>
           </View>
           <Text style={styles.hint}>
@@ -285,7 +281,7 @@ export default function SettingsScreen() {
 
         <TouchableOpacity style={styles.destructiveCard} onPress={handleResetLearning} activeOpacity={0.7}>
           <View style={styles.destructiveRow}>
-            <TrashIcon size={17} color="#EF4444" />
+            <TrashIcon size={17} color={theme.red} />
             <Text style={styles.destructiveLabel}>Reset Learned Timings</Text>
           </View>
           <Text style={styles.destructiveHint}>Resets adapted times. Sessions history kept.</Text>
@@ -297,50 +293,51 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#0A0A0A' },
+  screen: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4,
   },
   backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -10 },
-  title: { flex: 1, fontSize: 18, fontWeight: '700', color: '#F0F0F0' },
+  title: { flex: 1, fontSize: 18, fontWeight: '700', color: theme.text },
 
   content: { paddingHorizontal: 24, paddingBottom: 40 },
   sectionLabel: {
-    fontSize: 11, fontWeight: '600', color: '#888', textTransform: 'uppercase',
+    fontSize: 11, fontWeight: '600', color: theme.muted, textTransform: 'uppercase',
     letterSpacing: 1.5, marginTop: 24, marginBottom: 12,
   },
   card: {
-    backgroundColor: '#111', borderWidth: 1, borderColor: '#2A2A2A', borderRadius: 12,
+    backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 18,
     padding: 16, marginBottom: 8,
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardLabel: { fontSize: 15, fontWeight: '500', color: '#F0F0F0' },
-  cardValue: { fontSize: 15, fontWeight: '700', color: '#22D46E' },
-  hint: { fontSize: 12, lineHeight: 18, color: '#888', marginTop: 10 },
+  cardLabel: { fontSize: 15, fontWeight: '500', color: theme.text },
+  cardValue: { fontSize: 15, fontWeight: '700', color: theme.green },
+  hint: { fontSize: 12, lineHeight: 18, color: theme.muted, marginTop: 10 },
 
   input: {
     marginTop: 12, height: 44, borderRadius: 8, paddingHorizontal: 12,
-    backgroundColor: '#1C1C1C', borderWidth: 1, borderColor: '#2A2A2A',
-    color: '#F0F0F0', fontSize: 14,
+    backgroundColor: theme.raised, borderWidth: 1, borderColor: theme.border,
+    color: theme.text, fontSize: 14,
   },
   keyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
-  keyValue: { fontSize: 14, color: '#F0F0F0', fontVariant: ['tabular-nums'] },
-  keyEdit: { fontSize: 14, fontWeight: '700', color: '#22D46E' },
+  keyValue: { fontSize: 14, color: theme.text, fontVariant: ['tabular-nums'] },
+  keyEdit: { fontSize: 14, fontWeight: '700', color: theme.green },
   keyBtnRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
-  keyBtn: { flex: 1, height: 40, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#2A2A2A' },
-  keyBtnPrimary: { backgroundColor: '#22D46E', borderColor: '#22D46E' },
+  keyBtn: { flex: 1, height: 40, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.border },
+  keyBtnPrimary: { backgroundColor: theme.green, borderColor: theme.green },
   keyBtnPrimaryText: { color: '#000', fontWeight: '800', fontSize: 14 },
-  keyBtnText: { color: '#888', fontWeight: '600', fontSize: 14 },
+  keyBtnText: { color: theme.muted, fontWeight: '600', fontSize: 14 },
 
   destructiveCard: {
-    backgroundColor: '#111', borderWidth: 1, borderColor: '#2A2A2A', borderRadius: 12,
+    backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 18,
     padding: 16, marginBottom: 8,
   },
   dataRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  dataLabel: { fontSize: 15, fontWeight: '500', color: '#F0F0F0' },
+  dataLabel: { fontSize: 15, fontWeight: '500', color: theme.text },
 
   destructiveRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  destructiveLabel: { fontSize: 15, fontWeight: '500', color: '#EF4444' },
-  destructiveHint: { fontSize: 12, color: '#888', marginTop: 6 },
+  destructiveLabel: { fontSize: 15, fontWeight: '500', color: theme.red },
+  destructiveHint: { fontSize: 12, color: theme.muted, marginTop: 6 },
 });
+

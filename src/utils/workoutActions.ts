@@ -1,164 +1,126 @@
 import { router } from 'expo-router';
 import { useHistoryStore } from '../store/historyStore';
-import { useWorkoutStore, getNextExercise } from '../store/workoutStore';
+import { flushWorkout, useWorkoutStore, getNextExercise } from '../store/workoutStore';
 import { getAdaptedTiming, getAdaptedTransition } from './timing';
 import { stopAlert } from './alertService';
-import { SetRecord, TimingRecord } from '../types';
-
-/**
- * Phase-advancing actions, extracted from the workout screen so they can be
- * driven from two places: the on-screen buttons AND the notification action
- * buttons ("Done" / "Start next set") pressed while the app is backgrounded
- * or the phone is locked. Everything reads live store state via getState(),
- * and every action guards on the current phase so a stale notification tap
- * (e.g. after the phase already advanced in-app) is a harmless no-op.
- */
+import { SetRecord } from '../types';
+import { saveFinishedWorkout } from './workoutRecovery';
 
 export type ActionOutcome = 'break' | 'transition' | 'set' | 'finished' | 'noop';
 
-async function finishSession(): Promise<void> {
-  const ws = useWorkoutStore.getState();
-  const { sessionId, sessionStartedAt, activeWorkout, setRecords } = ws;
-  if (!sessionId || !sessionStartedAt || !activeWorkout) return;
-  const totalDuration = (Date.now() - sessionStartedAt) / 1000;
-  const distinctExercises = new Set(setRecords.map((r) => r.exerciseId)).size;
-  await useHistoryStore.getState().saveSession({
-    id: sessionId,
-    day: activeWorkout.day,
-    date: new Date().toISOString(),
-    totalDuration,
-    exercisesCompleted: distinctExercises,
-    setRecords,
-  });
-  ws.reset();
-  // No navigator when invoked from a headless notification event — the saved
-  // session still shows up in History, so silently skipping is fine.
+// Screen and notification taps share a lock while checkpoint/storage writes
+// are pending. Repeated taps must not duplicate a record or skip the next set.
+let advancing = false;
+async function advance(action: () => Promise<ActionOutcome> | ActionOutcome): Promise<ActionOutcome> {
+  if (advancing) return 'noop';
+  advancing = true;
   try {
-    router.replace('/complete');
-  } catch {}
+    const outcome = await action();
+    await flushWorkout();
+    return outcome;
+  } finally {
+    advancing = false;
+  }
 }
 
-/** SET / AMRAP / TIMED finished → record the set, then break, transition, or finish. */
+async function finishSession(): Promise<void> {
+  await saveFinishedWorkout();
+  // There may be no mounted navigator during a headless notification event.
+  try { router.replace('/complete'); } catch {}
+}
+
+/** SET / AMRAP / TIMED finished → atomically record it and enter the next phase. */
 export async function completeCurrentSet(): Promise<ActionOutcome> {
-  const ws = useWorkoutStore.getState();
-  const hs = useHistoryStore.getState();
-  const exercise = ws.activeWorkout?.exercises[ws.currentExerciseIndex] ?? null;
-  const phase = ws.currentPhase;
-  if (!exercise || !ws.sessionId || !ws.phaseStartedAt) return 'noop';
-  if (phase !== 'set' && phase !== 'timed' && phase !== 'amrap') return 'noop';
-  stopAlert();
+  return advance(async () => {
+    const ws = useWorkoutStore.getState();
+    const hs = useHistoryStore.getState();
+    const exercise = ws.activeWorkout?.exercises[ws.currentExerciseIndex];
+    const phase = ws.currentPhase;
+    if (!exercise || !ws.sessionId || !ws.phaseStartedAt || ws.pausedAt != null) return 'noop';
+    if (phase !== 'set' && phase !== 'timed' && phase !== 'amrap') return 'noop';
+    stopAlert();
 
-  const isAmrap = phase === 'amrap';
-  const actualSetDuration = isAmrap ? null : (Date.now() - ws.phaseStartedAt) / 1000;
-  const timing = getAdaptedTiming(exercise.id, exercise.type, hs.timingRecords, hs.settings);
+    const actualSetDuration = phase === 'amrap' ? null : (Date.now() - ws.phaseStartedAt) / 1000;
+    const timing = getAdaptedTiming(exercise.id, exercise.type, hs.timingRecords, hs.settings);
+    const record: SetRecord = {
+      exerciseId: exercise.id, exerciseName: exercise.name, setNumber: ws.currentSetNumber,
+      predictedSetDuration: timing.setDuration, actualSetDuration,
+      predictedBreakDuration: timing.breakDuration, actualBreakDuration: 0,
+      completedAt: new Date().toISOString(),
+    };
+    const lastSet = ws.currentSetNumber >= exercise.sets;
+    const next = lastSet ? getNextExercise() : null;
+    const outcome = !lastSet ? 'break' : next ? 'transition' : 'finished';
+    ws.completeSet(record, outcome === 'finished' ? 'idle' : outcome,
+      outcome === 'break' ? timing.breakDuration : next ?
+        getAdaptedTransition(next.id, hs.timingRecords, hs.settings) : null);
+    await flushWorkout();
 
-  const setRecord: SetRecord = {
-    exerciseId: exercise.id,
-    exerciseName: exercise.name,
-    setNumber: ws.currentSetNumber,
-    predictedSetDuration: timing.setDuration,
-    actualSetDuration,
-    predictedBreakDuration: timing.breakDuration,
-    actualBreakDuration: 0,
-    completedAt: new Date().toISOString(),
-  };
-  ws.addSetRecord(setRecord);
-
-  // Learn the set duration now (break/transition is recorded when it ends).
-  await hs.addTimingRecord({
-    exerciseId: exercise.id,
-    setNumber: ws.currentSetNumber,
-    setDuration: actualSetDuration,
-    breakDuration: null,
-    date: new Date().toISOString(),
-    sessionId: ws.sessionId,
-  });
-
-  const isLastSet = ws.currentSetNumber >= exercise.sets;
-  if (!isLastSet) {
-    ws.startBreak(timing.breakDuration);
-    return 'break';
-  }
-  const next = getNextExercise();
-  if (next) {
-    ws.startTransition(getAdaptedTransition(next.id, hs.timingRecords, hs.settings));
-    return 'transition';
-  }
-  await finishSession();
-  return 'finished';
-}
-
-/** BREAK finished (always within the same exercise) → next set. */
-export async function startNextSet(): Promise<ActionOutcome> {
-  const ws = useWorkoutStore.getState();
-  const hs = useHistoryStore.getState();
-  const exercise = ws.activeWorkout?.exercises[ws.currentExerciseIndex] ?? null;
-  if (!exercise || !ws.sessionId || !ws.phaseStartedAt || ws.currentPhase !== 'break') return 'noop';
-  stopAlert();
-  const actualBreakDuration = (Date.now() - ws.phaseStartedAt) / 1000;
-  ws.patchLastBreak(actualBreakDuration);
-
-  const timingRecord: TimingRecord = {
-    exerciseId: exercise.id,
-    setNumber: ws.currentSetNumber,
-    setDuration: null,
-    breakDuration: actualBreakDuration,
-    date: new Date().toISOString(),
-    sessionId: ws.sessionId,
-  };
-  await hs.addTimingRecord(timingRecord);
-
-  ws.completeBreak(actualBreakDuration);
-  const timing = getAdaptedTiming(exercise.id, exercise.type, hs.timingRecords, hs.settings);
-  ws.startSet(timing.setDuration);
-  return 'set';
-}
-
-/**
- * SKIP BREAK → record the actual (short) break for history, but don't feed it
- * into learning (a deliberate skip isn't representative of needed rest).
- */
-export function skipBreak(): ActionOutcome {
-  const ws = useWorkoutStore.getState();
-  const hs = useHistoryStore.getState();
-  const exercise = ws.activeWorkout?.exercises[ws.currentExerciseIndex] ?? null;
-  if (!exercise || !ws.phaseStartedAt || ws.currentPhase !== 'break') return 'noop';
-  stopAlert();
-  const actualBreakDuration = (Date.now() - ws.phaseStartedAt) / 1000;
-  ws.patchLastBreak(actualBreakDuration);
-  ws.completeBreak(actualBreakDuration);
-  const timing = getAdaptedTiming(exercise.id, exercise.type, hs.timingRecords, hs.settings);
-  ws.startSet(timing.setDuration);
-  return 'set';
-}
-
-/** TRANSITION finished → optionally learn the setup time, advance to next exercise. */
-export async function continueToNextExercise(record: boolean): Promise<ActionOutcome> {
-  const ws = useWorkoutStore.getState();
-  const hs = useHistoryStore.getState();
-  if (!ws.sessionId || !ws.phaseStartedAt || ws.currentPhase !== 'transition') return 'noop';
-  stopAlert();
-  const actualTransition = (Date.now() - ws.phaseStartedAt) / 1000;
-  const next = getNextExercise();
-  if (record && next) {
     await hs.addTimingRecord({
-      exerciseId: next.id,
-      setNumber: 0,
-      setDuration: null,
-      breakDuration: actualTransition,
-      date: new Date().toISOString(),
-      sessionId: ws.sessionId,
-      transition: true,
+      exerciseId: exercise.id, setNumber: ws.currentSetNumber,
+      setDuration: actualSetDuration, breakDuration: null,
+      date: record.completedAt, sessionId: ws.sessionId,
     });
-  }
-  const hasMore = ws.advanceToNextExercise();
-  if (hasMore) {
-    const fresh = useWorkoutStore.getState();
-    const nextEx = fresh.activeWorkout!.exercises[fresh.currentExerciseIndex];
-    const timing = getAdaptedTiming(nextEx.id, nextEx.type, hs.timingRecords, hs.settings);
-    fresh.startSet(timing.setDuration);
+    if (outcome === 'finished') await finishSession();
+    return outcome;
+  });
+}
+
+/** BREAK finished → checkpoint its duration and the next set together. */
+export async function startNextSet(): Promise<ActionOutcome> {
+  return advance(async () => {
+    const ws = useWorkoutStore.getState();
+    const hs = useHistoryStore.getState();
+    const exercise = ws.activeWorkout?.exercises[ws.currentExerciseIndex];
+    if (!exercise || !ws.sessionId || !ws.phaseStartedAt || ws.currentPhase !== 'break' || ws.pausedAt != null) return 'noop';
+    stopAlert();
+    const actualBreakDuration = (Date.now() - ws.phaseStartedAt) / 1000;
+    const timing = getAdaptedTiming(exercise.id, exercise.type, hs.timingRecords, hs.settings);
+    ws.completeBreak(actualBreakDuration, timing.setDuration);
+    await flushWorkout();
+    await hs.addTimingRecord({
+      exerciseId: exercise.id, setNumber: ws.currentSetNumber,
+      setDuration: null, breakDuration: actualBreakDuration,
+      date: new Date().toISOString(), sessionId: ws.sessionId,
+    });
     return 'set';
-  }
-  await finishSession();
-  return 'finished';
+  });
+}
+
+/** Deliberately skipped rest stays in session history, but is not learned. */
+export async function skipBreak(): Promise<ActionOutcome> {
+  return advance(() => {
+    const ws = useWorkoutStore.getState();
+    const hs = useHistoryStore.getState();
+    const exercise = ws.activeWorkout?.exercises[ws.currentExerciseIndex];
+    if (!exercise || !ws.phaseStartedAt || ws.currentPhase !== 'break' || ws.pausedAt != null) return 'noop';
+    stopAlert();
+    const timing = getAdaptedTiming(exercise.id, exercise.type, hs.timingRecords, hs.settings);
+    ws.completeBreak((Date.now() - ws.phaseStartedAt) / 1000, timing.setDuration);
+    return 'set';
+  });
+}
+
+/** TRANSITION finished → checkpoint the first set of the next exercise. */
+export async function continueToNextExercise(record: boolean): Promise<ActionOutcome> {
+  return advance(async () => {
+    const ws = useWorkoutStore.getState();
+    const hs = useHistoryStore.getState();
+    if (!ws.sessionId || !ws.phaseStartedAt || ws.currentPhase !== 'transition' || ws.pausedAt != null) return 'noop';
+    const next = getNextExercise();
+    if (!next) return 'noop';
+    stopAlert();
+    const actualTransition = (Date.now() - ws.phaseStartedAt) / 1000;
+    const timing = getAdaptedTiming(next.id, next.type, hs.timingRecords, hs.settings);
+    ws.advanceToNextExercise(timing.setDuration);
+    await flushWorkout();
+    if (record) {
+      await hs.addTimingRecord({
+        exerciseId: next.id, setNumber: 0, setDuration: null,
+        breakDuration: actualTransition, date: new Date().toISOString(),
+        sessionId: ws.sessionId, transition: true,
+      });
+    }
+    return 'set';
+  });
 }

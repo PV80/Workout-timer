@@ -29,9 +29,14 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund --legacy-peer-deps
+
+      - name: Check workout recovery
+        run: npm test && npm run typecheck
 
       - name: Expo prebuild
         run: npx expo prebuild --platform android --no-install
@@ -85,6 +90,8 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund --legacy-peer-deps

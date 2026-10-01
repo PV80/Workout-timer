@@ -323,9 +323,9 @@ export default function WorkoutScreen() {
     <>
       <CtaButton
         label="START NEXT SET"
-        icon={<PlayIcon size={16} color="#fff" />}
+        icon={<PlayIcon size={16} color="#000" />}
         background={theme.blue}
-        textColor="#fff"
+        textColor="#000"
         onPress={handleStartNextSet}
         compact={isCompact}
       />

@@ -123,7 +123,7 @@ export default function CompleteScreen() {
         <EntranceView style={[styles.hero, isCompact && styles.heroCompact]}>
           <Text style={styles.savedLabel}>SESSION SAVED</Text>
           <EntranceView delay={80} style={[styles.checkCircle, isCompact && styles.checkCircleCompact]}>
-            <CheckIcon size={isCompact ? 26 : 38} color="#fff" strokeWidth={3} />
+            <CheckIcon size={isCompact ? 26 : 38} color="#000" strokeWidth={3} />
           </EntranceView>
           <Text style={[styles.title, isCompact && styles.titleCompact]}>WORKOUT COMPLETE</Text>
           <Text style={[styles.duration, isCompact && styles.durationCompact]}>

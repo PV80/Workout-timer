@@ -1,132 +1,180 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  cancelAnimation, Easing, useAnimatedProps, useSharedValue, withRepeat, withSequence, withTiming,
-} from 'react-native-reanimated';
-import Svg, { Circle, G, Line, Path } from 'react-native-svg';
-import { EXERCISE_ARTWORK, ExerciseArtwork, Point, Pose, REST_ARTWORK } from '../data/exerciseIllustrations';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Animated, { cancelAnimation, createAnimatedPropAdapter, Easing, useAnimatedProps, useDerivedValue, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Svg, { Ellipse, G, Path } from 'react-native-svg';
+import { add, EXERCISE_ARTWORK, ExerciseArtwork, getExerciseRig, Point, project, REST_ARTWORK, Rig, V3 } from '../data/exerciseIllustrations';
 import { theme } from '../theme';
 import { useMotionEnabled } from './Motion';
 
-const MovingPath = Animated.createAnimatedComponent(Path);
-const MovingCircle = Animated.createAnimatedComponent(Circle);
-const MovingLine = Animated.createAnimatedComponent(Line);
-
-function point(a: Point, b: Point, t: number): Point {
+const MovingPath=Animated.createAnimatedComponent(Path);
+const MovingG=Animated.createAnimatedComponent(G);
+const groupTransformAdapter=createAnimatedPropAdapter(props=>{
   'worklet';
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  if(Array.isArray(props.transform)){props.matrix=props.transform;delete props.transform;}
+},['matrix']);
+const MovingEllipse=Animated.createAnimatedComponent(Ellipse);
+const SKIN='#DDB397', FAR_SKIN='#A77F68', SHIRT='#26BC78', FAR_SHIRT='#176647';
+function line(points: Point[], close=false) {
+  'worklet'; return points.map((p,i)=>`${i?'L':'M'}${p[0].toFixed(3)},${p[1].toFixed(3)}`).join(' ')+(close?' Z':'');
 }
-function limb(a: Point, b: Point, c: Point): string {
-  'worklet';
-  return `M${a[0]},${a[1]} L${b[0]},${b[1]} L${c[0]},${c[1]}`;
+function worldLine(points: V3[], yaw: number, close=false) {
+  'worklet'; return line(points.map(p=>project(p,yaw)),close);
 }
-function interpolatePose(art: ExerciseArtwork, t: number): Pose {
-  'worklet';
-  const a = art.start, b = art.end;
-  return { head: point(a.head,b.head,t), shoulder: point(a.shoulder,b.shoulder,t), hip: point(a.hip,b.hip,t),
-    elbow: point(a.elbow,b.elbow,t), hand: point(a.hand,b.hand,t), knee: point(a.knee,b.knee,t), foot: point(a.foot,b.foot,t),
-    farElbow: point(a.farElbow,b.farElbow,t), farHand: point(a.farHand,b.farHand,t),
-    farKnee: point(a.farKnee,b.farKnee,t), farFoot: point(a.farFoot,b.farFoot,t) };
+function capsule(a: Point,b: Point,wa: number,wb: number) {
+  'worklet';const dx=b[0]-a[0],dy=b[1]-a[1],d=Math.max(0.01,Math.sqrt(dx*dx+dy*dy));
+  const x=-dy/d,y=dx/d;
+  return line([[a[0]+x*wa,a[1]+y*wa],[b[0]+x*wb,b[1]+y*wb],[b[0]-x*wb,b[1]-y*wb],[a[0]-x*wa,a[1]-y*wa]],true);
+}
+function plate(p: Point, rx: number,ry: number) {
+  'worklet';return `M${p[0]-rx},${p[1]} a${rx},${ry} 0 1 0 ${rx*2},0 a${rx},${ry} 0 1 0 ${-rx*2},0`;
+}
+function gear(r: Rig, art: ExerciseArtwork): {shaft:string;plates:string} {
+  'worklet';let shaft='',plates='';const yaw=art.yaw;
+  if(art.equipment==='barbell'&&r.bar){
+    shaft=worldLine([add(r.bar,[-38,0,0]),add(r.bar,[38,0,0])],yaw);
+    const rx=2+8*Math.sin(yaw*Math.PI/180);
+    for(const side of [-1,1])plates+=plate(project(add(r.bar,[side*30,0,0]),yaw),rx,11);
+  }
+  if(art.equipment==='dumbbells')for(const p of r.dumbbells){
+    shaft+=worldLine([add(p,[-8,0,0]),add(p,[8,0,0])],yaw);
+    for(const side of [-1,1])plates+=worldLine([add(p,[side*6,-4,0]),add(p,[side*6,4,0])],yaw);
+  }
+  if(art.equipment==='landmine'&&r.bar&&r.anchor){
+    const a=project(r.anchor,yaw),b=project(r.bar,yaw);shaft=line([a,b]);
+    const dx=b[0]-a[0],dy=b[1]-a[1],d=Math.sqrt(dx*dx+dy*dy),ux=dx/d,uy=dy/d;
+    const c:Point=[b[0]-ux*8,b[1]-uy*8];
+    plates=line([[c[0]-uy*9-ux*2,c[1]+ux*9-uy*2],[c[0]+uy*9-ux*2,c[1]-ux*9-uy*2],
+      [c[0]+uy*9+ux*2,c[1]-ux*9+uy*2],[c[0]-uy*9+ux*2,c[1]+ux*9+uy*2]],true);
+  }
+  if(r.roller){
+    const p=r.roller,a=(p[2]+32)/9;
+    shaft=worldLine([add(p,[-14,0,0]),add(p,[14,0,0])],yaw);
+    plates=plate(project(p,yaw),9*Math.sin(yaw*Math.PI/180),9);
+    for(const offset of [0,Math.PI/2]){
+      const y=7*Math.cos(a+offset),z=7*Math.sin(a+offset);
+      shaft+=worldLine([add(p,[0,y,z]),add(p,[0,-y,-z])],yaw);
+    }
+  }
+  return {shaft,plates};
+}
+function equipmentFrame(art:ExerciseArtwork) {
+  const yaw=art.yaw;let frame='',pad='';
+  function bench(x:number,z1:number,z2:number,y:number,width:number){
+    pad+=worldLine([[x-width,y,z1],[x+width,y,z1],[x+width,y,z2],[x-width,y,z2]],yaw,true);
+    for(const z of [z1+4,z2-4])for(const side of [-1,1])frame+=worldLine([[x+side*(width-3),y,z],[x+side*(width-3),1,z]],yaw);
+  }
+  if(art.bench==='flat')bench(0,-49,10,39,13);
+  if(art.bench==='incline'){
+    bench(0,-1,17,39,13);
+    pad+=worldLine([[-13,68,-47],[13,68,-47],[13,39,4],[-13,39,4]],yaw,true);
+    frame+=worldLine([[0,62,-38],[0,1,-28]],yaw);
+  }
+  if(art.bench==='row')bench(-11,-43,38,25,12);
+  if(art.bench==='split')bench(0,-46,-25,27,22);
+  if(art.bench==='seat')bench(0,-17,9,34,16);
+  if(art.bench==='preacher'){
+    bench(0,-24,-2,39,14);
+    pad+=worldLine([[-17,73,-2],[17,73,-2],[17,54,21],[-17,54,21]],yaw,true);
+    frame+=worldLine([[0,63,10],[0,1,10]],yaw);
+  }
+  if(art.equipment==='pullup'){
+    frame+=worldLine([[-40,1,0],[-40,117,0],[40,117,0],[40,1,0]],yaw);
+    frame+=worldLine([[-48,1,0],[-32,1,0]],yaw)+worldLine([[32,1,0],[48,1,0]],yaw);
+  }
+  if(art.equipment==='bars')for(const side of [-1,1])frame+=worldLine([[side*20,1,-18],[side*20,74,-18],[side*20,74,20],[side*20,1,20]],yaw);
+  return {frame,pad};
 }
 
-/** Decorative SVGs with a transparent canvas. Animation uses only the UI thread. */
-export function ExerciseScene({ exerciseId, phase, paused = false }: {
-  exerciseId?: string; phase: string; paused?: boolean;
-}) {
-  const rest = phase === 'break';
-  const art = rest ? REST_ARTWORK : EXERCISE_ARTWORK[exerciseId ?? ''];
-  const enabled = useMotionEnabled() && !paused;
-  const movement = useSharedValue(0);
-  useEffect(() => {
-    cancelAnimation(movement);
-    if (enabled && art) movement.value = withRepeat(withSequence(
-      withTiming(1, { duration: rest ? 2400 : 1400, easing: Easing.inOut(Easing.sin) }),
-      withTiming(0, { duration: rest ? 2400 : 1400, easing: Easing.inOut(Easing.sin) }),
-    ), -1, false);
-    return () => cancelAnimation(movement);
-  }, [exerciseId, rest, enabled, art, movement]);
-
-  // Hooks always run, including for an unknown exercise. Unknowns show no unrelated pose.
-  const model = art ?? REST_ARTWORK;
-  const head = useAnimatedProps(() => {
-    const p = interpolatePose(model, movement.value);
-    return { cx: p.head[0], cy: p.head[1] };
+/** Decorative exercise loop. Skeletal calculations and SVG updates stay on the UI thread. */
+export function ExerciseScene({exerciseId,phase,paused=false}:{exerciseId?:string;phase:string;paused?:boolean}) {
+  const rest=phase==='break', id=rest?'rest':exerciseId??'';
+  const compact=useWindowDimensions().height<800;
+  const art=rest?REST_ARTWORK:EXERCISE_ARTWORK[id];
+  const model=art??REST_ARTWORK;
+  const enabled=useMotionEnabled()&&!paused;
+  const cycle=useSharedValue(0);
+  useEffect(()=>{
+    // Reset only when the movement changes; pausing keeps the current pose.
+    cancelAnimation(cycle);cycle.value=0;
+  },[id,cycle]);
+  useEffect(()=>{
+    cancelAnimation(cycle);
+    if(enabled&&art){
+      const [out,hold,back,reset]=art.tempo;
+      cycle.value=withRepeat(withSequence(
+        withTiming(1,{duration:out,easing:Easing.inOut(Easing.sin)}),
+        withTiming(1,{duration:hold}),
+        withTiming(0,{duration:back,easing:Easing.inOut(Easing.sin)}),
+        withTiming(0,{duration:reset}),
+      ),-1,false);
+    }
+    return()=>cancelAnimation(cycle);
+  },[id,enabled,art,cycle]);
+  const rig=useDerivedValue(()=>getExerciseRig(id,cycle.value));
+  const yaw=model.yaw;
+  const farLeg=useAnimatedProps(()=>({d:worldLine([rig.value.hips[0],rig.value.knees[0],rig.value.feet[0]],yaw)}));
+  const nearLeg=useAnimatedProps(()=>({d:worldLine([rig.value.hips[1],rig.value.knees[1],rig.value.feet[1]],yaw)}));
+  const shorts=useAnimatedProps(()=>{
+    const r=rig.value;let d='';for(let i=0;i<2;i++){
+      const h=r.hips[i],k=r.knees[i];d+=worldLine([h,[h[0]+(k[0]-h[0])*.48,h[1]+(k[1]-h[1])*.48,h[2]+(k[2]-h[2])*.48]],yaw);
+    }return {d};
   });
-  const torso = useAnimatedProps(() => {
-    const p = interpolatePose(model, movement.value);
-    return { d: `M${p.shoulder[0]},${p.shoulder[1]} L${p.hip[0]},${p.hip[1]}` };
+  const shoes=useAnimatedProps(()=>({d:rig.value.feet.map(p=>worldLine([add(p,[0,-1,-2]),add(p,[0,-2,6])],yaw)).join('')}));
+  const farArm=useAnimatedProps(()=>({d:worldLine([rig.value.shoulders[0],rig.value.elbows[0],rig.value.hands[0]],yaw)}));
+  const nearArm=useAnimatedProps(()=>({d:worldLine([rig.value.shoulders[1],rig.value.elbows[1],rig.value.hands[1]],yaw)}));
+  const torso=useAnimatedProps(()=>({d:capsule(project(rig.value.shoulder,yaw),project(rig.value.hip,yaw),9.5+rig.value.breath*.65,6.5)}));
+  const seam=useAnimatedProps(()=>({d:worldLine([add(rig.value.shoulder,[4,0,0]),add(rig.value.hip,[4,0,0])],yaw)}));
+  const head=useAnimatedProps(()=>{
+    const r=rig.value,h=project(r.head,yaw),s=project(r.shoulder,yaw);
+    const angle=Math.atan2(h[0]-s[0],s[1]-h[1]);
+    // Adapt the SVG transform to the native matrix consumed by Fabric.
+    return {transform:[Math.cos(angle),Math.sin(angle),-Math.sin(angle),Math.cos(angle),h[0],h[1]] as [number,number,number,number,number,number]};
+  },undefined,groupTransformAdapter);
+  const neck=useAnimatedProps(()=>({d:worldLine([rig.value.shoulder,rig.value.head],yaw)}));
+  const shaft=useAnimatedProps(()=>({d:gear(rig.value,model).shaft}));
+  const plates=useAnimatedProps(()=>({d:gear(rig.value,model).plates}));
+  const glow=useAnimatedProps(()=>{
+    const r=rig.value,p=project([r.shoulder[0],(r.shoulder[1]+r.hip[1])/2,r.shoulder[2]],yaw);
+    return {cx:p[0],cy:p[1],rx:18+r.breath*5,ry:23+r.breath*6,opacity:0.055+r.breath*0.025};
   });
-  const arms = useAnimatedProps(() => {
-    const p = interpolatePose(model, movement.value);
-    return { d: limb(p.shoulder,p.elbow,p.hand) };
-  });
-  const farArms = useAnimatedProps(() => {
-    const p = interpolatePose(model, movement.value);
-    return { d: limb(p.shoulder,p.farElbow,p.farHand) };
-  });
-  const legs = useAnimatedProps(() => {
-    const p = interpolatePose(model, movement.value);
-    return { d: limb(p.hip,p.knee,p.foot) };
-  });
-  const farLegs = useAnimatedProps(() => {
-    const p = interpolatePose(model, movement.value);
-    return { d: limb(p.hip,p.farKnee,p.farFoot) };
-  });
-  const load = useAnimatedProps(() => {
-    const p = interpolatePose(model, movement.value);
-    const anchor = model.loadAtHip ? p.hip : p.hand;
-    if (model.equipment === 'landmine') return { d: `M24,113 L${anchor[0]},${anchor[1]}` };
-    const width = model.equipment === 'barbell' ? 27 : 13;
-    const x = anchor[0], y = anchor[1];
-    return { d: `M${x-width},${y} H${x+width} M${x-width+4},${y-6} V${y+6} M${x+width-4},${y-6} V${y+6}` };
-  });
-  const farLoad = useAnimatedProps(() => {
-    const p = interpolatePose(model, movement.value), x = p.farHand[0], y = p.farHand[1];
-    return { d: `M${x-13},${y} H${x+13} M${x-9},${y-6} V${y+6} M${x+9},${y-6} V${y+6}` };
-  });
-  const wheel = useAnimatedProps(() => {
-    const p = interpolatePose(model, movement.value);
-    return { cx: p.hand[0], cy: p.hand[1] + 7 };
-  });
-  const breath = useAnimatedProps(() => ({ r: 22 + movement.value * 13, opacity: 0.12 - movement.value * 0.04 }));
-  if (!art) return null;
-
-  return <View style={styles.card}>
-    <Svg width={110} height={82} viewBox="0 0 160 120" accessible={false}>
-      {rest && <MovingCircle cx={75} cy={58} r={22} fill={theme.blue} animatedProps={breath} />}
-      <Line x1={15} y1={117} x2={148} y2={117} stroke={theme.border} strokeWidth={2} />
-      {art.bench && <G fill="none" stroke={theme.subtle} strokeWidth={4} strokeLinecap="round">
-        {art.bench === 'incline' ? <Path d="M29 64 L86 88 H118 M41 73 V114 M106 88 V114" /> :
-          art.bench === 'seat' ? <Path d="M60 87 H132 M67 88 V114 M126 88 V114" /> :
-          art.bench === 'preacher' ? <Path d="M53 90 H83 M61 90 V114 M83 54 L116 75 M101 65 V114" /> :
-          <Path d="M20 84 H101 M31 85 V114 M89 85 V114" />}
-      </G>}
-      {art.equipment === 'pullup' && <Path d="M25 114 V12 H139 V114" fill="none" stroke={theme.subtle} strokeWidth={4} />}
-      {art.equipment === 'bars' && <Path d="M43 114 V57 H57 M113 114 V57 H128" fill="none" stroke={theme.subtle} strokeWidth={4} />}
-      {art.equipment === 'landmine' && <Circle cx={24} cy={113} r={6} fill={theme.subtle} />}
+  const chest=useAnimatedProps(()=>({opacity:.15+rig.value.breath*.12}));
+  if(!art)return null;
+  const frame=equipmentFrame(art);
+  const title=paused?'Take your time.':rest?'Breathe. Reset.':phase==='transition'?'Get set.':id==='plank'?'Stay steady.':'Move with control.';
+  return <View style={[styles.card,compact&&{minHeight:88}]} accessible={false}>
+    <Svg width={compact?110:138} height={compact?82:104} viewBox="0 0 192 144" accessible={false}>
+      <Ellipse cx={96} cy={136} rx={75} ry={5} fill="#07110D" opacity={.55}/>
+      {art.floor&&<Path d={worldLine([[-22,0,-65],[22,0,-65],[22,0,54],[-22,0,54]],yaw,true)} fill="#243B32" stroke="#395648" strokeWidth={1}/>} 
+      {(rest||id==='plank')&&<MovingEllipse animatedProps={glow} fill={rest?theme.blue:theme.green}/>}
+      <Path d={frame.frame} fill="none" stroke="#587369" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"/>
+      <Path d={frame.pad} fill="#30483C" stroke="#718A7D" strokeWidth={3} strokeLinejoin="round"/>
       <G fill="none" strokeLinecap="round" strokeLinejoin="round">
-        <MovingPath d={limb(art.start.hip,art.start.farKnee,art.start.farFoot)} stroke={theme.subtle} strokeWidth={7} animatedProps={farLegs} />
-        <MovingPath d={limb(art.start.shoulder,art.start.farElbow,art.start.farHand)} stroke={theme.subtle} strokeWidth={6} animatedProps={farArms} />
-        <MovingPath d={limb(art.start.hip,art.start.knee,art.start.foot)} stroke={theme.text} strokeWidth={7} animatedProps={legs} />
-        <MovingPath d={`M${art.start.shoulder.join(',')} L${art.start.hip.join(',')}`} stroke={rest ? theme.blue : theme.green} strokeWidth={15} animatedProps={torso} />
-        <MovingPath d={limb(art.start.shoulder,art.start.elbow,art.start.hand)} stroke={theme.text} strokeWidth={6} animatedProps={arms} />
-        {art.equipment === 'dumbbells' && <MovingPath stroke={theme.subtle} strokeWidth={4} animatedProps={farLoad} />}
-        {['barbell','dumbbells','landmine'].includes(art.equipment) && <MovingPath stroke={rest ? theme.blue : theme.green} strokeWidth={4} animatedProps={load} />}
-        {art.equipment === 'roller' && <MovingCircle r={9} stroke={theme.green} strokeWidth={4} animatedProps={wheel} />}
+        <MovingPath animatedProps={farLeg} stroke={FAR_SKIN} strokeWidth={8}/>
+        <MovingPath animatedProps={farArm} stroke={FAR_SKIN} strokeWidth={7}/>
+        <MovingPath animatedProps={nearLeg} stroke={SKIN} strokeWidth={8}/>
+        <MovingPath animatedProps={shorts} stroke="#243F33" strokeWidth={12}/>
+        <MovingPath animatedProps={shoes} stroke="#DEE8E1" strokeWidth={6}/>
+        <MovingPath animatedProps={neck} stroke={SKIN} strokeWidth={6}/>
       </G>
-      <MovingCircle cx={art.start.head[0]} cy={art.start.head[1]} r={8} fill={theme.text} animatedProps={head} />
+      <MovingPath animatedProps={torso} fill={rest?'#4F95D4':SHIRT} stroke={rest?'#30678F':FAR_SHIRT} strokeWidth={1.2} strokeLinejoin="round"/>
+      <MovingG animatedProps={chest}><MovingPath animatedProps={seam} stroke="#C9FBE0" strokeWidth={2} strokeLinecap="round"/></MovingG>
+      <MovingG animatedProps={head}>
+        <Path d="M-6 0 Q-7-8 0-8 Q7-8 7-2 L9 1 L6 3 Q5 8 0 7 Q-6 6-6 0Z" fill={SKIN}/>
+        <Path d="M-6 2 Q-9-7-2-9 Q6-11 8-4 L3-4 L1-1 L-3-2 L-3 3Z" fill="#26372F"/>
+      </MovingG>
+      <MovingPath animatedProps={nearArm} stroke={SKIN} strokeWidth={7} fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+      <MovingPath animatedProps={shaft} stroke="#ACBEB4" strokeWidth={2.7} fill="none" strokeLinecap="round"/>
+      <MovingPath animatedProps={plates} stroke={rest?theme.blue:'#72C69D'} strokeWidth={art.equipment==='dumbbells'?4:2.5} fill={art.equipment==='dumbbells'?'none':'#223C30'} strokeLinecap="round" strokeLinejoin="round"/>
     </Svg>
     <View style={styles.copy}>
-      <Text style={styles.title}>{paused ? 'Take your time.' : rest ? 'Breathe. Reset.' : phase === 'transition' ? 'Get set for the next one.' : exerciseId === 'plank' ? 'Stay steady.' : 'Find your rhythm.'}</Text>
-      <Text style={styles.subtitle}>{paused ? 'Resume when you are ready.' : rest ? 'Let your breathing settle.' : phase === 'transition' ? 'A moment to set up.' : 'One set at a time.'}</Text>
+      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.subtitle}>{paused?'Resume when you are ready.':phase==='transition'?'A moment to set up.':art.cue}</Text>
     </View>
   </View>;
 }
-const styles = StyleSheet.create({
-  card: { width: '100%', maxWidth: 360, minHeight: 88, flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 10, paddingVertical: 4, gap: 8, backgroundColor: theme.surface,
-    borderRadius: 20, borderWidth: 1, borderColor: theme.border },
-  copy: { flex: 1, paddingRight: 4 },
-  title: { color: theme.text, fontSize: 13, fontWeight: '700', lineHeight: 19 },
-  subtitle: { color: theme.muted, fontSize: 11, lineHeight: 16, marginTop: 4 },
+const styles=StyleSheet.create({
+  card:{width:'100%',maxWidth:360,minHeight:108,flexDirection:'row',alignItems:'center',paddingHorizontal:6,paddingVertical:2,gap:8,
+    backgroundColor:theme.surface,borderRadius:20,borderWidth:1,borderColor:theme.border},
+  copy:{flex:1,paddingRight:10},title:{color:theme.text,fontSize:12,fontWeight:'700',lineHeight:18},
+  subtitle:{color:theme.muted,fontSize:10,lineHeight:15,marginTop:4},
 });

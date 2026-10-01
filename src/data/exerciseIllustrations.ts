@@ -1,96 +1,237 @@
-/** Transparent vector poses, matched to every exercise in the training programme. */
+/**
+ * Exercise-specific 3D joint rigs, projected to transparent SVG.
+ * Angles/targets move; bone lengths do not interpolate. Equipment stays on its grip.
+ * Form references and chosen variants: docs/exercise-motion.md.
+ */
+export type V3 = readonly [number, number, number];
 export type Point = readonly [number, number];
-export interface Pose {
-  head: Point; shoulder: Point; hip: Point; elbow: Point; hand: Point; knee: Point; foot: Point;
-  farElbow: Point; farHand: Point; farKnee: Point; farFoot: Point;
-}
 export interface ExerciseArtwork {
-  start: Pose; end: Pose;
+  yaw: number;
+  tempo: readonly [number, number, number, number]; // outward, hold, return, reset (ms)
+  cue: string;
   equipment: 'barbell' | 'dumbbells' | 'landmine' | 'roller' | 'pullup' | 'bars' | 'none';
-  bench?: 'flat' | 'incline' | 'seat' | 'preacher';
-  loadAtHip?: boolean;
+  bench?: 'flat' | 'incline' | 'preacher' | 'split' | 'row' | 'seat';
+  floor?: boolean;
 }
-function pose(head: Point, shoulder: Point, hip: Point, elbow: Point, hand: Point, knee: Point, foot: Point,
-  farHand?: Point, farElbow?: Point, farKnee?: Point, farFoot?: Point): Pose {
-  const offset = (p: Point): Point => [p[0] + 9, p[1] + 2];
-  return { head, shoulder, hip, elbow, hand, knee, foot,
-    farElbow: farElbow ?? offset(elbow), farHand: farHand ?? offset(hand),
-    farKnee: farKnee ?? offset(knee), farFoot: farFoot ?? offset(foot) };
-}
-const stand = pose([80, 22], [80, 39], [80, 78], [60, 62], [58, 90], [83, 97], [74, 113]);
-const lying = pose([28, 62], [45, 75], [85, 78], [59, 59], [54, 39], [108, 91], [117, 113]);
-const bent = pose([51, 43], [66, 58], [103, 77], [61, 77], [55, 99], [100, 97], [113, 113]);
-
+const lift = [1050, 200, 1800, 250] as const;
+const lower = [1750, 200, 1150, 300] as const;
 export const EXERCISE_ARTWORK: Record<string, ExerciseArtwork> = {
-  'bench-press': { equipment: 'barbell', bench: 'flat', start: lying,
-    end: pose([28,62],[45,75],[85,78],[54,45],[55,21],[108,91],[117,113]) },
-  'incline-db': { equipment: 'dumbbells', bench: 'incline',
-    start: pose([45,43],[56,60],[89,82],[68,59],[61,40],[111,91],[119,113]),
-    end: pose([45,43],[56,60],[89,82],[70,38],[74,15],[111,91],[119,113]) },
-  'landmine-chest': { equipment: 'landmine',
-    start: pose([89,23],[88,40],[79,79],[75,59],[64,53],[77,96],[79,113]),
-    end: pose([89,23],[88,40],[79,79],[72,40],[62,29],[77,96],[79,113]) },
-  'barbell-curls': { equipment: 'barbell', start: stand,
-    end: pose([80,22],[80,39],[80,78],[60,62],[58,39],[83,97],[74,113]) },
-  'preacher-curls': { equipment: 'barbell', bench: 'preacher',
-    start: pose([68,29],[72,46],[68,85],[92,60],[110,80],[91,91],[100,113]),
-    end: pose([68,29],[72,46],[68,85],[92,60],[89,36],[91,91],[100,113]) },
-  'leg-raises': { equipment: 'none',
-    start: pose([26,88],[43,99],[88,101],[54,96],[64,106],[115,101],[143,106]),
-    end: pose([26,88],[43,99],[88,101],[54,96],[64,106],[107,70],[114,33]) },
-  'ab-roller': { equipment: 'roller',
-    start: pose([55,46],[65,63],[97,75],[55,81],[43,98],[103,99],[87,111]),
-    end: pose([43,66],[60,83],[93,87],[43,92],[28,102],[102,99],[87,111]) },
-  'back-squats': { equipment: 'barbell',
-    start: pose([80,22],[80,39],[80,78],[59,51],[61,35],[83,97],[74,113]),
-    end: pose([69,46],[74,63],[102,85],[54,75],[55,60],[72,91],[74,113]) },
-  'landmine-lunges': { equipment: 'landmine',
-    start: pose([80,22],[80,39],[80,78],[70,60],[61,55],[69,96],[62,113],undefined,undefined,[108,95],[121,113]),
-    end: pose([74,43],[77,60],[91,83],[67,74],[58,73],[62,86],[58,113],undefined,undefined,[116,105],[134,113]) },
-  'bulgarian-split': { equipment: 'dumbbells', bench: 'seat',
-    start: pose([72,23],[72,40],[74,77],[58,63],[59,85],[59,96],[55,113],undefined,undefined,[105,81],[129,79]),
-    end: pose([72,40],[72,57],[85,91],[58,80],[58,98],[55,91],[55,113],undefined,undefined,[109,100],[129,79]) },
-  'hip-thrusts': { equipment: 'barbell', bench: 'flat', loadAtHip: true,
-    start: pose([31,57],[46,72],[85,95],[57,81],[83,88],[115,80],[115,113]),
-    end: pose([31,57],[46,72],[85,74],[57,75],[83,69],[115,80],[115,113]) },
-  'military-press': { equipment: 'barbell',
-    start: pose([80,25],[80,42],[80,80],[54,61],[55,38],[83,98],[74,113]),
-    end: pose([80,25],[80,42],[80,80],[61,28],[65,13],[83,98],[74,113]) },
-  'landmine-press': { equipment: 'landmine',
-    start: pose([87,24],[87,41],[79,80],[70,59],[66,44],[78,98],[77,113]),
-    end: pose([87,24],[87,41],[79,80],[82,29],[87,14],[78,98],[77,113]) },
-  'lateral-raises': { equipment: 'dumbbells',
-    start: pose([80,21],[80,38],[80,80],[58,61],[54,89],[83,98],[74,113],[108,89],[104,61]),
-    end: pose([80,21],[80,38],[80,80],[47,39],[23,35],[83,98],[74,113],[137,35],[113,39]) },
-  'skull-crushers': { equipment: 'dumbbells', bench: 'flat',
-    start: pose([28,62],[45,75],[85,78],[61,41],[36,35],[108,91],[117,113]),
-    end: pose([28,62],[45,75],[85,78],[61,41],[67,16],[108,91],[117,113]) },
-  'dips': { equipment: 'bars',
-    start: pose([79,27],[79,44],[79,79],[100,52],[114,56],[106,94],[119,84]),
-    end: pose([79,43],[79,60],[79,93],[101,78],[114,56],[104,107],[122,96]) },
-  'oblique-twists': { equipment: 'none',
-    start: pose([71,39],[74,57],[83,95],[60,65],[43,69],[117,87],[141,105],[49,64],[63,58]),
-    end: pose([89,39],[91,57],[83,95],[106,63],[123,69],[117,87],[141,105],[116,65],[100,59]) },
-  'plank': { equipment: 'none',
-    start: pose([26,53],[46,69],[92,77],[45,93],[27,102],[118,88],[145,101]),
-    end: pose([26,52],[46,68],[92,77],[45,93],[27,102],[118,88],[145,101]) },
-  'deadlifts': { equipment: 'barbell',
-    start: pose([56,44],[68,59],[102,79],[65,81],[61,103],[92,98],[109,113]),
-    end: pose([91,22],[91,39],[87,79],[87,56],[86,76],[97,98],[109,113]) },
-  'pull-ups': { equipment: 'pullup',
-    start: pose([80,43],[80,61],[80,95],[47,46],[54,16],[99,106],[115,98],[107,16],[113,46]),
-    end: pose([80,22],[80,39],[80,75],[56,27],[54,16],[96,97],[114,90],[107,16],[105,27]) },
-  'landmine-rows': { equipment: 'landmine', start: bent,
-    end: pose([51,43],[66,58],[103,77],[84,57],[85,68],[100,97],[113,113]) },
-  'db-rows': { equipment: 'dumbbells', bench: 'flat',
-    start: pose([47,41],[61,56],[103,77],[59,77],[54,98],[110,80],[128,108],[42,79],[51,69]),
-    end: pose([47,41],[61,56],[103,77],[83,51],[83,67],[110,80],[128,108],[42,79],[51,69]) },
-  'rear-delt-flyes': { equipment: 'dumbbells',
-    start: pose([51,43],[66,58],[103,77],[60,77],[55,98],[100,97],[113,113],[89,95],[83,75]),
-    end: pose([51,43],[66,58],[103,77],[44,56],[23,51],[100,97],[113,113],[135,51],[104,56]) },
+  'bench-press': { yaw: 58, tempo: lift, cue: 'Steady feet. Controlled press.', equipment: 'barbell', bench: 'flat' },
+  'incline-db': { yaw: 48, tempo: lift, cue: 'Press up. Lower with control.', equipment: 'dumbbells', bench: 'incline' },
+  'landmine-chest': { yaw: 62, tempo: lift, cue: 'Brace. Press along the arc.', equipment: 'landmine' },
+  'barbell-curls': { yaw: 48, tempo: lift, cue: 'Still elbows. Smooth curl.', equipment: 'barbell' },
+  'preacher-curls': { yaw: 60, tempo: lift, cue: 'Keep upper arms on the pad.', equipment: 'barbell', bench: 'preacher' },
+  'leg-raises': { yaw: 72, tempo: [1400,200,2100,200], cue: 'Steady trunk. Slow lowering.', equipment: 'none', floor: true },
+  'ab-roller': { yaw: 76, tempo: [2100,250,1700,300], cue: 'Brace. Reach. Return.', equipment: 'roller', floor: true },
+  'back-squats': { yaw: 58, tempo: lower, cue: 'Sit down. Drive through feet.', equipment: 'barbell' },
+  'landmine-lunges': { yaw: 62, tempo: [1950,180,1450,300], cue: 'Step back. Keep the front foot set.', equipment: 'landmine' },
+  'bulgarian-split': { yaw: 66, tempo: lower, cue: 'Lower steadily. Drive up.', equipment: 'dumbbells', bench: 'split' },
+  'hip-thrusts': { yaw: 70, tempo: [1200,650,1800,250], cue: 'Lift through hips. Keep ribs down.', equipment: 'barbell', floor: true },
+  'military-press': { yaw: 30, tempo: lift, cue: 'Brace. Press overhead.', equipment: 'barbell' },
+  'landmine-press': { yaw: 60, tempo: lift, cue: 'One arm. A smooth upward arc.', equipment: 'landmine' },
+  'lateral-raises': { yaw: 12, tempo: [1400,250,1950,200], cue: 'Soft elbows. Stop at shoulder height.', equipment: 'dumbbells' },
+  'skull-crushers': { yaw: 60, tempo: lower, cue: 'Keep upper arms steady.', equipment: 'dumbbells', bench: 'flat' },
+  'dips': { yaw: 52, tempo: lower, cue: 'Lower with control. Press up.', equipment: 'bars' },
+  'oblique-twists': { yaw: 22, tempo: [1700,200,1700,200], cue: 'Turn the chest. Keep hips steady.', equipment: 'none', floor: true },
+  'plank': { yaw: 74, tempo: [2400,0,2600,0], cue: 'Hold the line. Breathe.', equipment: 'none', floor: true },
+  'deadlifts': { yaw: 66, tempo: [1350,300,1950,500], cue: 'Bar close. Hips and knees together.', equipment: 'barbell' },
+  'pull-ups': { yaw: 22, tempo: [1450,300,2100,300], cue: 'Pull smoothly. Lower fully.', equipment: 'pullup' },
+  'landmine-rows': { yaw: 60, tempo: lift, cue: 'Steady hinge. Elbow toward hip.', equipment: 'landmine' },
+  'db-rows': { yaw: 60, tempo: lift, cue: 'Row toward hip. Keep torso still.', equipment: 'dumbbells', bench: 'row' },
+  'rear-delt-flyes': { yaw: 18, tempo: [1450,250,1950,200], cue: 'Hold the hinge. Open the arms.', equipment: 'dumbbells' },
 };
+export const REST_ARTWORK: ExerciseArtwork = { yaw: 55, tempo: [2500,250,3000,250], cue: 'Let your breathing settle.', equipment: 'none', bench: 'seat' };
 
-export const REST_ARTWORK: ExerciseArtwork = { equipment: 'none', bench: 'seat',
-  start: pose([72,26],[74,43],[72,83],[77,64],[93,77],[104,86],[113,113]),
-  end: pose([72,24],[74,41],[72,83],[77,63],[93,77],[104,86],[113,113]),
-};
+export interface Rig {
+  head: V3; shoulder: V3; hip: V3;
+  shoulders: [V3,V3]; hips: [V3,V3]; elbows: [V3,V3]; hands: [V3,V3]; knees: [V3,V3]; feet: [V3,V3];
+  bar: V3 | null; anchor: V3 | null; dumbbells: V3[]; roller: V3 | null; breath: number;
+}
+const RAD = Math.PI / 180;
+export function add(a: V3, b: V3): V3 { 'worklet'; return [a[0]+b[0],a[1]+b[1],a[2]+b[2]]; }
+function sub(a: V3, b: V3): V3 { 'worklet'; return [a[0]-b[0],a[1]-b[1],a[2]-b[2]]; }
+function mul(a: V3, n: number): V3 { 'worklet'; return [a[0]*n,a[1]*n,a[2]*n]; }
+function dot(a: V3, b: V3): number { 'worklet'; return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
+function length(a: V3): number { 'worklet'; return Math.sqrt(dot(a,a)); }
+function unit(a: V3): V3 { 'worklet'; return mul(a,1/Math.max(0.0001,length(a))); }
+function mix(a: number, b: number, q: number): number { 'worklet'; return a+(b-a)*q; }
+export function project(p: V3, yaw: number): Point {
+  'worklet'; const angle=yaw*RAD;
+  return [96+p[0]*Math.cos(angle)+p[2]*Math.sin(angle),136-p[1]+(p[2]*Math.cos(angle)-p[0]*Math.sin(angle))*0.10];
+}
+/** Two-bone inverse kinematics with a pole selecting the anatomical bend plane. */
+export function joint(root: V3, end: V3, upper: number, lower: number, pole: V3): V3 {
+  'worklet';
+  const delta=sub(end,root), distance=Math.max(0.0001,length(delta)), axis=unit(delta);
+  const d=Math.max(Math.abs(upper-lower)+0.0001,Math.min(upper+lower,distance));
+  const along=(upper*upper-lower*lower+d*d)/(2*d);
+  let perpendicular=sub(pole,mul(axis,dot(pole,axis)));
+  if(length(perpendicular)<0.001) perpendicular=sub([1,0,0],mul(axis,axis[0]));
+  return add(add(root,mul(axis,along)),mul(unit(perpendicular),Math.sqrt(Math.max(0,upper*upper-along*along))));
+}
+function arm(r: Rig, side: number, hand: V3, pole: V3 = [0,0,1]) {
+  'worklet'; r.hands[side]=hand; r.elbows[side]=joint(r.shoulders[side],hand,19,18,pole);
+}
+function leg(r: Rig, side: number, foot: V3, pole: V3 = [0,0,1]) {
+  'worklet'; r.feet[side]=foot; r.knees[side]=joint(r.hips[side],foot,24,24,pole);
+}
+function body(hip: V3, shoulder: V3, twist=0): Rig {
+  'worklet';
+  const direction=unit(sub(shoulder,hip));
+  const across: V3=[Math.cos(twist),0,Math.sin(twist)];
+  const shoulders: [V3,V3]=[add(shoulder,mul(across,-10)),add(shoulder,mul(across,10))];
+  const hips: [V3,V3]=[add(hip,[-6,0,0]),add(hip,[6,0,0])];
+  return { head:add(shoulder,mul(direction,13)),shoulder,hip,shoulders,hips,
+    elbows:[shoulders[0],shoulders[1]],hands:[shoulders[0],shoulders[1]],knees:[hips[0],hips[1]],feet:[hips[0],hips[1]],
+    bar:null,anchor:null,dumbbells:[],roller:null,breath:0 };
+}
+function standing(hip: V3=[0,53.4,0], lean=0): Rig {
+  'worklet'; const r=body(hip,add(hip,[0,34*Math.cos(lean),34*Math.sin(lean)]));
+  leg(r,0,[-9,6,5]);leg(r,1,[9,6,5]);
+  for(let i=0;i<2;i++){const side=i===0?-1:1;arm(r,i,add(r.shoulders[i],[side*3,-36,3]));}
+  return r;
+}
+function barGrip(r: Rig, centre: V3, halfWidth: number, pole: V3=[0,-1,0]) {
+  'worklet'; r.bar=centre;
+  arm(r,0,add(centre,[-halfWidth,0,0]),pole);arm(r,1,add(centre,[halfWidth,0,0]),pole);
+}
+function bench(incline=false): Rig {
+  'worklet';
+  const hip: V3=[0,45,4], shoulder: V3=incline?[0,62,-25.445]:[0,45,-30];
+  const r=body(hip,shoulder);leg(r,0,[-9,6,28]);leg(r,1,[9,6,28]);return r;
+}
+function landmine(y: number, x=0, anchorZ=100, radius=128): V3 {
+  'worklet'; return [x,y,anchorZ-Math.sqrt(radius*radius-y*y)];
+}
+/** q is the eased exercise phase, 0→1→0. Holds move only the breath field. */
+export function getExerciseRig(id: string, q: number): Rig {
+  'worklet';
+  let r=standing();
+  if(id==='rest') {
+    r=body([0,41,-5],[0,75,-5]);
+    leg(r,0,[-9,6,26]);leg(r,1,[9,6,26]);
+    arm(r,0,[-9,44,13],[0,0,1]);arm(r,1,[9,44,13],[0,0,1]);r.breath=q;return r;
+  }
+  if(id==='bench-press'||id==='incline-db'||id==='skull-crushers') {
+    r=bench(id==='incline-db');
+    if(id==='bench-press') barGrip(r,[0,mix(50,78,q),mix(-23,-29,q)],21);
+    else if(id==='incline-db') {
+      for(let i=0;i<2;i++){const side=i===0?-1:1;arm(r,i,[side*mix(23,15,q),mix(64,97,q),mix(-16,-22,q)],[side*0.25,-1,0]);}
+      r.dumbbells=[r.hands[0],r.hands[1]];
+    } else {
+      // The upper arm stays nearly vertical; only the forearm rotates beside the head.
+      for(let i=0;i<2;i++){
+        const elbow=add(r.shoulders[i],[0,18.34,-4.965]);
+        const angle=mix(10,110,q)*RAD;
+        r.elbows[i]=elbow;r.hands[i]=add(elbow,[0,18*Math.cos(angle),-18*Math.sin(angle)]);
+      }
+      r.dumbbells=[r.hands[0],r.hands[1]];
+    }
+  } else if(id==='military-press') {
+    barGrip(r,[0,mix(86,122,q),mix(9,0,q)],22,[0,-1,1]);
+  } else if(id==='barbell-curls'||id==='preacher-curls') {
+    if(id==='preacher-curls'){
+      r=body([0,45,-10],[0,78.49,-4.1]);leg(r,0,[-9,6,17]);leg(r,1,[9,6,17]);
+    }
+    for(let i=0;i<2;i++){
+      const a=id==='preacher-curls'?40*RAD:5*RAD;
+      const elbow=add(r.shoulders[i],[0,-19*Math.cos(a),19*Math.sin(a)]);
+      const angle=mix(id==='preacher-curls'?40:8,145,q)*RAD;
+      r.elbows[i]=elbow;r.hands[i]=add(elbow,[0,-18*Math.cos(angle),18*Math.sin(angle)]);
+    }
+    r.bar=mul(add(r.hands[0],r.hands[1]),0.5);
+  } else if(id==='landmine-chest'||id==='landmine-press') {
+    const single=id==='landmine-press';r.anchor=[single?10:0,0,100];r.bar=landmine(mix(80,104,q),single?10:0);
+    if(single){arm(r,1,r.bar,[0,-1,0]);arm(r,0,[-8,66,8],[0,-1,0]);}
+    else {arm(r,0,add(r.bar,[-3,0,0]),[-1,-1,0]);arm(r,1,add(r.bar,[3,0,0]),[1,-1,0]);}
+  } else if(id==='lateral-raises'||id==='rear-delt-flyes') {
+    if(id==='rear-delt-flyes')r=standing([0,49,0],66*RAD);
+    const angle=mix(8,88,q)*RAD;
+    for(let i=0;i<2;i++){
+      const side=i===0?-1:1;
+      r.elbows[i]=add(r.shoulders[i],[side*19*Math.sin(angle),-19*Math.cos(angle),0]);
+      r.hands[i]=add(r.elbows[i],[side*18*Math.sin(angle-0.1),-18*Math.cos(angle-0.1),0]);
+    }
+    r.dumbbells=[r.hands[0],r.hands[1]];
+  } else if(id==='back-squats') {
+    const lean=mix(0,32,q)*RAD;
+    r=standing([0,mix(53.5,26,q),8-34*Math.sin(lean)],lean);
+    leg(r,0,[-12,6,8]);leg(r,1,[12,6,8]);
+    barGrip(r,add(r.shoulder,[0,-1,-3]),24,[0,-1,-1]);
+  } else if(id==='deadlifts') {
+    const lean=mix(58,0,q)*RAD;
+    r=standing([0,mix(38,53.5,q),5-34*Math.sin(lean)],lean);
+    leg(r,0,[-8,6,10]);leg(r,1,[8,6,10]);
+    const drop=Math.sqrt(37*37-3*3-7*7);
+    barGrip(r,add(r.shoulder,[0,-drop,7]),13,[0,0,1]);
+  } else if(id==='landmine-lunges') {
+    const descend=q, step=q;
+    r=standing([0,50-19*descend,-12*descend],5*RAD);
+    leg(r,0,[-9,6,12]);leg(r,1,[9,6+4*Math.sin(Math.PI*step),5-43*step]);
+    r.anchor=[0,0,100];r.bar=landmine(r.shoulder[1]-5);
+    arm(r,0,add(r.bar,[-3,0,0]),[-1,-1,0]);arm(r,1,add(r.bar,[3,0,0]),[1,-1,0]);
+  } else if(id==='bulgarian-split') {
+    r=standing([0,50-18*q,1-6*q],10*RAD);
+    leg(r,1,[9,6,20]);leg(r,0,[-9,33,-32]);
+    r.dumbbells=[r.hands[0],r.hands[1]];
+  } else if(id==='hip-thrusts') {
+    const rise=mix(3,20,q);
+    const shoulder: V3=[0,12,-35];
+    r=body([0,12+rise,-35+Math.sqrt(34*34-rise*rise)],shoulder);
+    leg(r,0,[-9,6,23]);leg(r,1,[9,6,23]);
+    barGrip(r,add(r.hip,[0,4,0]),12,[0,0,1]);
+  } else if(id==='dips') {
+    const shoulder: V3=[0,mix(107,83,q),5];
+    r=body(add(shoulder,[0,-33.26,-7.07]),shoulder);
+    arm(r,0,[-20,74,0],[0,0,-1]);arm(r,1,[20,74,0],[0,0,-1]);
+    for(let i=0;i<2;i++){
+      r.knees[i]=add(r.hips[i],[0,-22.55,-8.21]);r.feet[i]=add(r.knees[i],[0,-12,-20.7846]);
+    }
+  } else if(id==='pull-ups') {
+    r=standing([0,mix(49,77,q),0]);
+    arm(r,0,[-23,117,0],[-1,-1,0]);arm(r,1,[23,117,0],[1,-1,0]);
+    for(let i=0;i<2;i++){
+      r.knees[i]=add(r.hips[i],[0,-23.18,-6.21]);r.feet[i]=add(r.knees[i],[0,-14,-19.4936]);
+    }
+  } else if(id==='leg-raises') {
+    r=body([0,12,0],[0,12,-34]);const angle=mix(7,85,q)*RAD;
+    for(let i=0;i<2;i++){
+      const dir: V3=[0,Math.sin(angle),Math.cos(angle)];
+      r.knees[i]=add(r.hips[i],mul(dir,24));r.feet[i]=add(r.knees[i],mul(dir,24));
+      arm(r,i,add(r.shoulders[i],[0,-3,36]),[0,-1,0]);
+    }
+  } else if(id==='ab-roller') {
+    const a=mix(25,62,q)*RAD, hip: V3=[0,6+24*Math.cos(a),17-24*Math.sin(a)];
+    const rise=mix(16,7,q);r=body(hip,add(hip,[0,rise,-Math.sqrt(34*34-rise*rise)]));
+    r.roller=[0,9,mix(-32,-69,q)];
+    for(let i=0;i<2;i++){
+      const side=i===0?-1:1;r.knees[i]=[side*6,6,17];r.feet[i]=[side*6,6,41];
+      arm(r,i,add(r.roller,[side*10,0,0]),[0,-1,0]);
+    }
+  } else if(id==='plank') {
+    const rise=25/82,run=Math.sqrt(1-rise*rise);
+    r=body([0,31-34*rise,-31.867+34*run],[0,31,-31.867]);
+    for(let i=0;i<2;i++){
+      const side=i===0?-1:1;r.elbows[i]=[side*10,12,-31.867];r.hands[i]=[side*10,12,-49.867];
+      leg(r,i,[side*6,6,-31.867+82*run],[0,1,0]);
+    }
+    r.breath=q;
+  } else if(id==='oblique-twists') {
+    const angle=mix(-40,40,q)*RAD;
+    r=body([0,10,0],[0,39.445,-17],angle);
+    leg(r,0,[-7,6,41],[0,1,0]);leg(r,1,[7,6,41],[0,1,0]);
+    const grip: V3=[24*Math.sin(angle),32,-17+24*Math.cos(angle)];
+    arm(r,0,add(grip,[-2,0,0]),[-1,-1,0]);arm(r,1,add(grip,[2,0,0]),[1,-1,0]);
+  } else if(id==='db-rows'||id==='landmine-rows') {
+    if(id==='db-rows') {
+      r=body([0,51,-2],[0,67,28]);
+      leg(r,1,[9,6,-8]);r.knees[0]=[-6,30,-2-Math.sqrt(24*24-21*21)];r.feet[0]=add(r.knees[0],[0,0,-24]);
+      arm(r,0,[-10,30,28],[0,0,-1]);arm(r,1,[10,mix(31,55,q),mix(28,6,q)],[0,0,-1]);r.dumbbells=[r.hands[1]];
+    } else {
+      r=standing([0,49,0],66*RAD);leg(r,0,[-10,6,-9]);leg(r,1,[10,6,17]);
+      const y=mix(27,54,q);r.anchor=[10,0,-94];r.bar=[10,y,-94+Math.sqrt(128*128-y*y)];
+      arm(r,1,r.bar,[0,0,-1]);arm(r,0,[-10,40,14],[0,0,1]);
+    }
+  }
+  return r;
+}

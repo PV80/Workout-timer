@@ -16,10 +16,10 @@ const artwork = {
 export function ArtworkHero({ kind = 'training', label, title, subtitle, compact = false, inset = true }: {
   kind?: keyof typeof artwork; label: string; title: string; subtitle: string; compact?: boolean; inset?: boolean;
 }) {
-  return <EntranceView style={[styles.hero, compact && styles.compact, !inset && { marginHorizontal: 0 }]}>
-    <Image source={artwork[kind]} style={StyleSheet.absoluteFill} resizeMode="cover" accessible={false} />
+  return <EntranceView testID={`artwork-${kind}`} collapsable={false} style={[styles.hero, compact && styles.compact, !inset && { marginHorizontal: 0 }]}>
+    <Image source={artwork[kind]} style={styles.image} resizeMode="cover" accessible={false} />
     <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Defs><LinearGradient id="heroShade" x1="0" y1="0" x2="1" y2="0">
+      <Defs><LinearGradient id="heroShade" x1="0%" y1="0%" x2="100%" y2="0%">
         <Stop offset="0" stopColor={theme.background} stopOpacity="0.9" />
         <Stop offset="0.6" stopColor={theme.background} stopOpacity="0.5" />
         <Stop offset="1" stopColor={theme.background} stopOpacity="0.05" />
@@ -35,6 +35,9 @@ export function ArtworkHero({ kind = 'training', label, title, subtitle, compact
 }
 
 const styles = StyleSheet.create({
+  // Image adds the asset's intrinsic width/height before our styles on Android.
+  // Absolute edges alone leave a 960x640 image clipped inside a small card.
+  image: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
   hero: { minHeight: 208, marginHorizontal: 20, marginTop: 18, marginBottom: 14,
     borderRadius: 22, borderWidth: 1, borderColor: theme.border, overflow: 'hidden', justifyContent: 'flex-end' },
   compact: { minHeight: 138, marginTop: 8 },

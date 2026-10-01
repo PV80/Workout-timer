@@ -34,8 +34,8 @@ const CHANNEL_REMINDERS = 'reminders';
 
 // One phase alert and one ongoing status exist at a time — fixed ids mean a
 // re-display replaces in place (no flicker) and cancels are deterministic.
-const ALERT_ID = 'phase-alert';
-const ONGOING_ID = 'workout-ongoing';
+export const ALERT_ID = 'phase-alert';
+export const ONGOING_ID = 'workout-ongoing';
 const EXPORT_REMINDER_ID = 'weekly-export-reminder';
 
 const ACCENT = '#22D46E';

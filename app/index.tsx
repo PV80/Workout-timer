@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import * as Crypto from 'expo-crypto';
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Alert,
   ScrollView,
@@ -20,7 +20,7 @@ import {
   PlayIcon,
 } from '../src/components/icons';
 import { useHistoryStore } from '../src/store/historyStore';
-import { useWorkoutStore } from '../src/store/workoutStore';
+import { flushWorkout, useWorkoutStore } from '../src/store/workoutStore';
 import { getTodayWorkout, getNextWorkout, WORKOUTS } from '../src/data/workouts';
 import { canUseExactAlarms, openAlarmSettings } from '../src/utils/notificationService';
 import { getAdaptedTiming, estimateTotalDuration } from '../src/utils/timing';
@@ -103,11 +103,19 @@ export default function HomeScreen() {
   const abandonWorkout = useWorkoutStore((s) => s.abandonWorkout);
   const activeWorkout = useWorkoutStore((s) => s.activeWorkout);
   const hasActive = !!activeWorkout;
+  const recovered = useWorkoutStore((s) => s.recovered);
+  const recoveredCompletion = useWorkoutStore((s) => s.recoveredCompletion);
+
+  useEffect(() => {
+    if (!recovered && !recoveredCompletion) return;
+    useWorkoutStore.setState({ recovered: false, recoveredCompletion: false });
+    router.replace(recoveredCompletion ? '/complete' : '/workout');
+  }, [recovered, recoveredCompletion]);
 
   const today = getTodayWorkout();
   const nextWorkout = getNextWorkout();
 
-  function beginWorkout(workout: WorkoutDay, startIndex: number) {
+  async function beginWorkout(workout: WorkoutDay, startIndex: number) {
     const sessionId = Crypto.randomUUID();
     startWorkout(workout, sessionId, startIndex);
     // The store resolves the actual starting index (skipping any cardio);
@@ -117,6 +125,11 @@ export default function HomeScreen() {
     if (firstEx) {
       const timing = getAdaptedTiming(firstEx.id, firstEx.type, timingRecords, settings);
       startSet(timing.setDuration);
+    }
+    try {
+      await flushWorkout();
+    } catch {
+      Alert.alert('Progress could not be saved', 'Keep the app open. You can retry saving on the workout screen.');
     }
     router.push('/workout');
     maybePromptAlarmPermission();

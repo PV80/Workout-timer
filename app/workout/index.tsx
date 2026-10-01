@@ -22,12 +22,13 @@ import {
   XIcon,
 } from '../../src/components/icons';
 import { useHistoryStore } from '../../src/store/historyStore';
-import { useWorkoutStore, getNextExercise } from '../../src/store/workoutStore';
+import { retryWorkoutSave, useWorkoutStore, getNextExercise } from '../../src/store/workoutStore';
 import { useTimer } from '../../src/hooks/useTimer';
 import { useWorkoutDuration } from '../../src/hooks/useWorkoutDuration';
 import { estimateLiveTotalDuration } from '../../src/utils/timing';
 import { formatTime, formatElapsed } from '../../src/utils/time';
 import { stopAlert } from '../../src/utils/alertService';
+import { saveFinishedWorkout } from '../../src/utils/workoutRecovery';
 import {
   completeCurrentSet,
   continueToNextExercise,
@@ -144,19 +145,19 @@ export default function WorkoutScreen() {
   // buttons); the screen just invokes it. Navigation to /complete on finish
   // happens inside the actions.
   const handleCompleteSet = useCallback(() => {
-    completeCurrentSet();
+    completeCurrentSet().catch(handleSaveFailure);
   }, []);
 
   const handleStartNextSet = useCallback(() => {
-    startNextSet();
+    startNextSet().catch(handleSaveFailure);
   }, []);
 
   const handleSkipBreak = useCallback(() => {
-    skipBreak();
+    skipBreak().catch(handleSaveFailure);
   }, []);
 
   const handleContinueToNext = useCallback((record: boolean) => {
-    continueToNextExercise(record);
+    continueToNextExercise(record).catch(handleSaveFailure);
   }, []);
 
   const handleTogglePause = useCallback(() => {
@@ -335,6 +336,25 @@ export default function WorkoutScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      {store.saveError && (
+        <TouchableOpacity
+          onPress={async () => {
+            try {
+              await retryWorkoutSave();
+              if (useWorkoutStore.getState().finishPending) {
+                await saveFinishedWorkout();
+                router.replace('/complete');
+              }
+            } catch { handleSaveFailure(); }
+          }}
+          accessibilityRole="button" accessibilityLabel="Retry saving workout"
+          style={{ padding: 12, backgroundColor: '#1C1C1C' }}
+        >
+          <Text style={{ color: '#F59E0B', textAlign: 'center' }}>
+            Progress could not be saved. Keep the app open. Tap to retry.
+          </Text>
+        </TouchableOpacity>
+      )}
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -434,6 +454,11 @@ export default function WorkoutScreen() {
       )}
     </SafeAreaView>
   );
+}
+
+function handleSaveFailure() {
+  useWorkoutStore.setState({ saveError: true });
+  Alert.alert('Progress could not be saved', 'Keep the app open and retry saving before switching apps.');
 }
 
 const styles = StyleSheet.create({

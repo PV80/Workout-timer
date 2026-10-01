@@ -1,32 +1,64 @@
 import 'react-native-gesture-handler';
 import { Stack } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, AppState, Text, TouchableOpacity, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useHistoryStore } from '../src/store/historyStore';
 import { useTrackerStore } from '../src/store/trackerStore';
+import { flushWorkout, useWorkoutStore } from '../src/store/workoutStore';
+import { ensureWorkoutReady } from '../src/utils/workoutRecovery';
 import {
   ensureWeeklyExportReminder,
   setupNotifications,
 } from '../src/utils/notificationService';
 import { warmUpAlert } from '../src/utils/alertService';
-// Side effect: registers the notification action-button handlers (foreground +
-// background) so "Done"/"Start next set" work from the shade and lock screen.
-import '../src/utils/notificationHandlers';
-
 export default function RootLayout() {
-  const hydrate = useHistoryStore((s) => s.hydrate);
   const hydrateTracker = useTrackerStore((s) => s.hydrate);
+  const [ready, setReady] = useState(false);
+  const [recoveryError, setRecoveryError] = useState(false);
+
+  async function restore() {
+    setRecoveryError(false);
+    try {
+      // Don't render Home/Start until its existing workout and history are loaded.
+      await ensureWorkoutReady();
+      await hydrateTracker();
+      await setupNotifications();
+      useWorkoutStore.getState().restoreNotifications();
+      ensureWeeklyExportReminder(useTrackerStore.getState().lastExportWeekKey);
+      setReady(true);
+    } catch {
+      setRecoveryError(true);
+    }
+  }
 
   useEffect(() => {
-    hydrate();
-    hydrateTracker().then(() => {
-      ensureWeeklyExportReminder(useTrackerStore.getState().lastExportWeekKey);
-    });
-    setupNotifications();
+    restore();
     warmUpAlert();
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') flushWorkout().catch(() => {});
+    });
+    return () => listener.remove();
   }, []);
+
+  if (!ready) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0A0A0A', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <StatusBar style="light" />
+        {recoveryError ? (
+          <>
+            <Text style={{ color: '#F0F0F0', textAlign: 'center', marginBottom: 20 }}>
+              Your saved workout could not be loaded. Your saved data has been kept.
+            </Text>
+            <TouchableOpacity onPress={restore} accessibilityRole="button" accessibilityLabel="Retry loading workout">
+              <Text style={{ color: '#22D46E', fontSize: 18 }}>Retry</Text>
+            </TouchableOpacity>
+          </>
+        ) : <ActivityIndicator color="#22D46E" accessibilityLabel="Loading saved workout" />}
+      </View>
+    );
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#0A0A0A' }}>

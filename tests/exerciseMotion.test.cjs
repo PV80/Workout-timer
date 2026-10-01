@@ -50,3 +50,30 @@ test('plank holds a straight shoulder hip ankle line while breathing without mov
   assert.ok(Math.abs(distance(first.shoulder,first.hip)+distance(first.hip,ankle)-distance(first.shoulder,ankle))<1e-7);
   assert.notEqual(first.breath,last.breath);
 });
+
+test('hanging leg raises keep extended arms on the bar, feet clear, and the trunk still', () => {
+  const initial=getExerciseRig('leg-raises',0),art=EXERCISE_ARTWORK['leg-raises'];
+  assert.equal(art.equipment,'pullup');
+  for(let n=0;n<=100;n++) {
+    const r=getExerciseRig('leg-raises',n/100);
+    for(const key of ['head','shoulder','hip','hands','elbows']) assert.deepEqual(r[key],initial[key]);
+    for(let side=0;side<2;side++) {
+      assert.equal(r.hands[side][1],art.barHeight);
+      assert.ok(Math.abs(distance(r.shoulders[side],r.hands[side])-37)<1e-8);
+      assert.ok(Math.abs(distance(r.hips[side],r.feet[side])-48)<1e-8);
+      assert.ok(r.feet[side][1]>=6);
+    }
+  }
+  assert.equal(getExerciseRig('leg-raises',1).feet[0][2],48);
+});
+
+test('prone faces point down throughout the motion and supine faces still point up', () => {
+  for(const id of ['plank','ab-roller','bench-press','skull-crushers']) for(let n=0;n<=100;n++) {
+    const r=getExerciseRig(id,n/100),a=EXERCISE_ARTWORK[id];
+    const {project}=new Function(source+';return {project}')();
+    const h=project(r.head,a.yaw),s=project(r.shoulder,a.yaw);
+    const angle=Math.atan2(h[0]-s[0],s[1]-h[1]);
+    const noseY=Math.sin(angle)*(a.faceDown?-1:1);
+    assert.ok(['plank','ab-roller'].includes(id)?noseY>0:noseY<0,id);
+  }
+});

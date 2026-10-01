@@ -1,3 +1,5 @@
+import { ActionGlyph } from '../src/components/ActionGlyph';
+import { ArtworkHero } from '../src/components/ArtworkHero';
 import { theme } from '../src/theme';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
@@ -36,18 +38,22 @@ export default function CompleteScreen() {
 
   async function exportThisWeek() {
     // Read fresh state inside the util — never from this render's props.
+    try {
     const result = await exportCurrentWeek();
     if (result === 'nothing') {
       Alert.alert(
         'Nothing to export yet',
-        'Log this week’s tracker pages first — then export.',
+        'Complete a workout, log a tracker page or add a weigh-in first.',
       );
       return;
     }
     if (typeof result === 'object') {
       Alert.alert('Sharing unavailable', `Files written to:\n${result.savedTo}`);
     }
-    setExported(true);
+    if (result === 'shared') setExported(true);
+    } catch (error: any) {
+      Alert.alert('Export failed', error?.message ?? 'Your records are still saved. Please retry.');
+    }
   }
 
   function capturePage() {
@@ -73,9 +79,11 @@ export default function CompleteScreen() {
       Alert.alert('Enter a weight', 'Type your bodyweight in kg, e.g. 82.5');
       return;
     }
-    await addBodyweight(kg);
-    setWeightSaved(true);
-    setWeightDraft('');
+    try {
+      await addBodyweight(kg);
+      setWeightSaved(true);
+      setWeightDraft('');
+    } catch { Alert.alert('Weight not saved', 'Please retry saving your weight.'); }
   }
 
   function weighByPhoto() {
@@ -132,6 +140,8 @@ export default function CompleteScreen() {
           <Text style={styles.durationLabel}>total time</Text>
         </EntranceView>
 
+        <ArtworkHero kind="complete" label="SESSION SAVED" title="Well earned." subtitle="Today's effort is in your history." compact inset={true} />
+
         <View style={styles.statsCard}>
           <View>
             <Text style={styles.statLabel}>Exercises</Text>
@@ -175,7 +185,7 @@ export default function CompleteScreen() {
                   accessibilityLabel="Export this week"
                 >
                   <View style={styles.busyRow}>
-                    <DownloadIcon size={16} color={theme.green} />
+                    <ActionGlyph kind="export" size={26} />
                     <Text style={styles.exportWeekText}>Export week (CSV + JSON)</Text>
                   </View>
                 </MotionPressable>
@@ -223,7 +233,7 @@ export default function CompleteScreen() {
                     </View>
                   ) : (
                     <View style={styles.busyRow}>
-                      <CameraIcon size={16} color={theme.green} />
+                      <ActionGlyph kind="capture" size={26} />
                       <Text style={styles.bwPhotoText}>Snap the scale instead</Text>
                     </View>
                   )}
@@ -250,7 +260,7 @@ export default function CompleteScreen() {
             </View>
           ) : (
             <View style={styles.busyRow}>
-              <CameraIcon size={19} color="#000" />
+              <ActionGlyph kind="capture" size={26} onAccent />
               <Text style={styles.doneBtnText}>Log tracker page</Text>
             </View>
           )}

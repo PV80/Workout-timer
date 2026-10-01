@@ -1,3 +1,4 @@
+import { ActionGlyph } from '../src/components/ActionGlyph';
 import { theme } from '../src/theme';
 import { router } from 'expo-router';
 import * as Crypto from 'expo-crypto';
@@ -301,7 +302,7 @@ export default function HomeScreen() {
           accessibilityLabel={startLabel}
         >
           <View style={styles.startBtnRow}>
-            <PlayIcon size={16} color="#000" />
+            <ActionGlyph kind="start" size={26} onAccent />
             <Text style={styles.startBtnText}>{startLabel}</Text>
           </View>
         </MotionPressable>

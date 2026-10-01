@@ -12,6 +12,8 @@ export interface ExerciseArtwork {
   equipment: 'barbell' | 'dumbbells' | 'landmine' | 'roller' | 'pullup' | 'bars' | 'none';
   bench?: 'flat' | 'incline' | 'preacher' | 'split' | 'row' | 'seat';
   floor?: boolean;
+  faceDown?: boolean;
+  barHeight?: number;
 }
 const lift = [1050, 200, 1800, 250] as const;
 const lower = [1750, 200, 1150, 300] as const;
@@ -21,8 +23,8 @@ export const EXERCISE_ARTWORK: Record<string, ExerciseArtwork> = {
   'landmine-chest': { yaw: 62, tempo: lift, cue: 'Brace. Press along the arc.', equipment: 'landmine' },
   'barbell-curls': { yaw: 48, tempo: lift, cue: 'Still elbows. Smooth curl.', equipment: 'barbell' },
   'preacher-curls': { yaw: 60, tempo: lift, cue: 'Keep upper arms on the pad.', equipment: 'barbell', bench: 'preacher' },
-  'leg-raises': { yaw: 72, tempo: [1400,200,2100,200], cue: 'Steady trunk. Slow lowering.', equipment: 'none', floor: true },
-  'ab-roller': { yaw: 76, tempo: [2100,250,1700,300], cue: 'Brace. Reach. Return.', equipment: 'roller', floor: true },
+  'leg-raises': { yaw: 65, tempo: [1400,250,2100,300], cue: 'Hang still. Raise legs. Lower slowly.', equipment: 'pullup', barHeight: 125 },
+  'ab-roller': { yaw: 76, tempo: [2100,250,1700,300], cue: 'Brace. Reach. Return.', equipment: 'roller', floor: true, faceDown: true },
   'back-squats': { yaw: 58, tempo: lower, cue: 'Sit down. Drive through feet.', equipment: 'barbell' },
   'landmine-lunges': { yaw: 62, tempo: [1950,180,1450,300], cue: 'Step back. Keep the front foot set.', equipment: 'landmine' },
   'bulgarian-split': { yaw: 66, tempo: lower, cue: 'Lower steadily. Drive up.', equipment: 'dumbbells', bench: 'split' },
@@ -33,7 +35,7 @@ export const EXERCISE_ARTWORK: Record<string, ExerciseArtwork> = {
   'skull-crushers': { yaw: 60, tempo: lower, cue: 'Keep upper arms steady.', equipment: 'dumbbells', bench: 'flat' },
   'dips': { yaw: 52, tempo: lower, cue: 'Lower with control. Press up.', equipment: 'bars' },
   'oblique-twists': { yaw: 22, tempo: [1700,200,1700,200], cue: 'Turn the chest. Keep hips steady.', equipment: 'none', floor: true },
-  'plank': { yaw: 74, tempo: [2400,0,2600,0], cue: 'Hold the line. Breathe.', equipment: 'none', floor: true },
+  'plank': { yaw: 74, tempo: [2400,0,2600,0], cue: 'Hold the line. Breathe.', equipment: 'none', floor: true, faceDown: true },
   'deadlifts': { yaw: 66, tempo: [1350,300,1950,500], cue: 'Bar close. Hips and knees together.', equipment: 'barbell' },
   'pull-ups': { yaw: 22, tempo: [1450,300,2100,300], cue: 'Pull smoothly. Lower fully.', equipment: 'pullup' },
   'landmine-rows': { yaw: 60, tempo: lift, cue: 'Steady hinge. Elbow toward hip.', equipment: 'landmine' },
@@ -194,11 +196,12 @@ export function getExerciseRig(id: string, q: number): Rig {
       r.knees[i]=add(r.hips[i],[0,-23.18,-6.21]);r.feet[i]=add(r.knees[i],[0,-14,-19.4936]);
     }
   } else if(id==='leg-raises') {
-    r=body([0,12,0],[0,12,-34]);const angle=mix(7,85,q)*RAD;
+    // Fixed overhead grip and quiet trunk; straight legs rotate at the hips.
+    r=body([0,54,0],[0,88,0]);const angle=mix(0,90,q)*RAD;
+    arm(r,0,[-10,125,0],[-1,-1,0]);arm(r,1,[10,125,0],[1,-1,0]);
     for(let i=0;i<2;i++){
-      const dir: V3=[0,Math.sin(angle),Math.cos(angle)];
+      const dir: V3=[0,-Math.cos(angle),Math.sin(angle)];
       r.knees[i]=add(r.hips[i],mul(dir,24));r.feet[i]=add(r.knees[i],mul(dir,24));
-      arm(r,i,add(r.shoulders[i],[0,-3,36]),[0,-1,0]);
     }
   } else if(id==='ab-roller') {
     const a=mix(25,62,q)*RAD, hip: V3=[0,6+24*Math.cos(a),17-24*Math.sin(a)];

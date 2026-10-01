@@ -1,3 +1,4 @@
+import { ArtworkHero } from '../src/components/ArtworkHero';
 import { PageHeader } from '../src/components/PageHeader';
 import { theme } from '../src/theme';
 import { router } from 'expo-router';
@@ -54,6 +55,8 @@ export default function HistoryScreen() {
       <PageHeader title="History" subtitle="Every session, recorded." />
 
       <ScrollView>
+        <ArtworkHero kind="history" label="YOUR PROGRESS" title="Effort adds up." subtitle="Your sessions, one step at a time." compact inset={true} />
+
         {sessions.length === 0 && (
           <View style={styles.empty}>
             <Text style={styles.emptyText}>No workouts yet. Complete your first session to see it here.</Text>

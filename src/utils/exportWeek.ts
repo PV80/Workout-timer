@@ -20,10 +20,15 @@ export async function exportWeekFiles(
   bodyweights: BodyweightEntry[],
   label: string,
 ): Promise<'shared' | 'nothing' | { savedTo: string }> {
-  if (entries.length === 0 && bodyweights.length === 0) return 'nothing';
+  const currentWeek = weekKey();
+  const sessions = useHistoryStore.getState().sessions.filter(s => {
+    const key = weekKey(new Date(s.date));
+    return label === 'previous-weeks' ? key < currentWeek : key === label;
+  });
+  if (entries.length === 0 && bodyweights.length === 0 && !sessions.some(s => s.setRecords.length)) return 'nothing';
 
   // Sessions provide the app-timed per-set durations (set_time_s column).
-  const csv = buildWeekCsv(entries, bodyweights, useHistoryStore.getState().sessions);
+  const csv = buildWeekCsv(entries, bodyweights, sessions);
   const csvUri = `${FileSystem.cacheDirectory}workout-${label}.csv`;
   await FileSystem.writeAsStringAsync(csvUri, csv, { encoding: FileSystem.EncodingType.UTF8 });
 
@@ -32,11 +37,6 @@ export async function exportWeekFiles(
   await FileSystem.writeAsStringAsync(jsonUri, JSON.stringify(backup, null, 1), {
     encoding: FileSystem.EncodingType.UTF8,
   });
-
-  const store = useTrackerStore.getState();
-  const week = weekKey();
-  await store.markExported(week);
-  ensureWeeklyExportReminder(week);
 
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(csvUri, {
@@ -47,6 +47,11 @@ export async function exportWeekFiles(
       mimeType: 'application/json',
       dialogTitle: `Workout backup — ${label} (JSON)`,
     });
+    // Only a successful current-week export silences this week's reminder.
+    if (label === currentWeek) {
+      await useTrackerStore.getState().markExported(currentWeek);
+      await ensureWeeklyExportReminder(currentWeek);
+    }
     return 'shared';
   }
   return { savedTo: `${csvUri}\n${jsonUri}` };
@@ -85,3 +90,4 @@ export async function shareBackupNow(): Promise<'shared' | { savedTo: string }> 
   }
   return { savedTo: uri };
 }
+

@@ -1,3 +1,5 @@
+import { ActionGlyph } from '../src/components/ActionGlyph';
+import { ArtworkHero } from '../src/components/ArtworkHero';
 import { PageHeader } from '../src/components/PageHeader';
 import { theme } from '../src/theme';
 import { router } from 'expo-router';
@@ -92,7 +94,7 @@ function ApiKeyField() {
           <View style={styles.keyBtnRow}>
             <TouchableOpacity
               style={[styles.keyBtn, styles.keyBtnPrimary]}
-              onPress={async () => { await setApiKey(draft); setEditing(false); }}
+              onPress={async () => { try { await setApiKey(draft); setEditing(false); } catch { Alert.alert('Key not saved', 'Please retry saving your API key.'); } }}
             >
               <Text style={styles.keyBtnPrimaryText}>Save</Text>
             </TouchableOpacity>
@@ -237,11 +239,13 @@ export default function SettingsScreen() {
 
         <ApiKeyField />
 
+        <ArtworkHero kind="backup" label="YOUR RECORDS" title="Keep a copy." subtitle="Back up your week before updating." compact inset={false} />
+
         <Text style={styles.sectionLabel}>Data</Text>
 
         <TouchableOpacity style={styles.card} onPress={handleBackupNow} activeOpacity={0.7}>
           <View style={styles.dataRow}>
-            <DownloadIcon size={17} color={theme.green} />
+            <ActionGlyph kind="export" size={26} />
             <Text style={styles.dataLabel}>Back up now (JSON)</Text>
           </View>
           <Text style={styles.hint}>

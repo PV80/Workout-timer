@@ -3,14 +3,13 @@ import { weekKey } from './week';
 
 function esc(v: string | number | boolean | null | undefined): string {
   const s = v == null ? '' : String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 // ── Correlating timer data with parsed pages ────────────────────────────────
 // The timer logs actualSetDuration on every DONE tap (per exercise, per set).
-// Page exercise names are handwritten/printed and the timer's come from the
-// hardcoded programme, so matching is fuzzy: normalised equality, containment,
-// or majority token overlap. "DB"/"BB" shorthand is expanded first.
+// Page names can use shorthand. Prefer normalized exact matches, then unique
+// multi-word matches; ambiguous candidates remain separate timer rows.
 
 function normName(s: string): string {
   return s
@@ -22,16 +21,14 @@ function normName(s: string): string {
     .trim();
 }
 
-function namesMatch(a: string, b: string): boolean {
-  const na = normName(a);
-  const nb = normName(b);
-  if (!na || !nb) return false;
-  if (na === nb || na.includes(nb) || nb.includes(na)) return true;
-  const ta = na.split(' ').filter((t) => t.length > 2);
-  const tb = new Set(nb.split(' ').filter((t) => t.length > 2));
-  if (ta.length === 0 || tb.size === 0) return false;
-  const overlap = ta.filter((t) => tb.has(t)).length;
-  return overlap >= Math.ceil(Math.min(ta.length, tb.size) / 2) && overlap > 0;
+function nameScore(a: string, b: string): number {
+  const na=normName(a),nb=normName(b);
+  if (!na || !nb) return 0;
+  if (na===nb) return 3;
+  const ta=na.split(' ').filter(t=>t.length>2),tb=nb.split(' ').filter(t=>t.length>2);
+  const overlap=ta.filter(t=>tb.includes(t)).length;
+  if (Math.min(ta.length,tb.length)>=2 && (na.includes(nb)||nb.includes(na))) return 2;
+  return overlap>=2 && overlap>=Math.ceil(Math.max(ta.length,tb.length)*.67)?1:0;
 }
 
 const DAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -48,33 +45,23 @@ function dayNameFrom(heading: string | undefined): string | null {
  * Sessions are matched to the page by ISO week + weekday, then the exercise
  * by fuzzy name, then the exact set number.
  */
-function findTimerSetSeconds(
-  sessions: WorkoutSession[],
-  entry: TrackerEntry,
-  exerciseName: string,
-  setNumber: number,
-): number | null {
-  const entryDay = dayNameFrom(entry.day);
-  for (const session of sessions) {
-    if (weekKey(new Date(session.date)) !== entry.weekKey) continue;
-    if (entryDay && session.day !== entryDay) continue;
-    let match: SetRecord | null = null;
-    for (const r of session.setRecords) {
-      if (r.setNumber === setNumber && namesMatch(r.exerciseName, exerciseName)) {
-        match = r;
-        break;
-      }
-    }
-    if (match) {
-      return match.actualSetDuration != null ? Math.round(match.actualSetDuration) : null;
-    }
-  }
-  return null;
+function findTimerRecord(
+  sessions: WorkoutSession[], entry: TrackerEntry, exerciseName: string, setNumber: number,
+): SetRecord | null {
+  const entryDay=dayNameFrom(entry.day);
+  const candidates=sessions.filter(s=>weekKey(new Date(s.date))===entry.weekKey && (!entryDay||s.day===entryDay))
+    .flatMap(s=>s.setRecords).filter(r=>r.setNumber===setNumber)
+    .map(record=>({record,score:nameScore(record.exerciseName,exerciseName)})).filter(c=>c.score>0);
+  const best=Math.max(0,...candidates.map(c=>c.score));
+  const matches=candidates.filter(c=>c.score===best);
+  // Different movements with the same score are ambiguous: keep their timer rows separate.
+  if (new Set(matches.map(c=>c.record.exerciseId)).size!==1) return null;
+  return matches[0]?.record??null;
 }
 
 /**
- * Flatten tracker entries into one CSV row per set (all captured days — the
- * `day` column distinguishes them), plus one row per bodyweight weigh-in.
+ * Flatten tracker entries and unmatched timer records into rows per set,
+ * plus one row per bodyweight weigh-in. Callers filter sessions by export week.
  * `set_time_s` is the app-timed length of that set (every exercise, every
  * DONE tap); `duration_s` stays the page-written hold time for timed moves.
  */
@@ -91,12 +78,15 @@ export function buildWeekCsv(
     'exercise', 'target', 'set', 'reps', 'weight', 'duration_s', 'set_time_s', 'inferred', 'raw', 'notes',
   ];
   const rows: string[] = [header.join(',')];
+  const matchedRecords = new Set<SetRecord>();
 
   for (const entry of entries) {
     const captured = entry.capturedAt.slice(0, 10);
     for (const ex of entry.exercises) {
       ex.sets.forEach((s) => {
-        const timerSeconds = findTimerSetSeconds(byDateDesc, entry, ex.name, s.setNumber);
+        const timerRecord = findTimerRecord(byDateDesc, entry, ex.name, s.setNumber);
+        if (timerRecord) matchedRecords.add(timerRecord);
+        const timerSeconds = timerRecord?.actualSetDuration == null ? null : Math.round(timerRecord.actualSetDuration);
         rows.push(
           [
             esc(captured),
@@ -120,6 +110,14 @@ export function buildWeekCsv(
     }
   }
 
+  // Preserve every saved timer set, including sessions without a photographed page.
+  for (const session of byDateDesc) for (const record of session.setRecords) {
+    if (matchedRecords.has(record)) continue;
+    rows.push([session.date.slice(0,10),'',session.day,'','',record.exerciseName,'',record.setNumber,
+      '','','',record.actualSetDuration == null ? '' : Math.round(record.actualSetDuration),'','',
+      `Timer record; session ${session.id}`].map(esc).join(','));
+  }
+
   // Bodyweight weigh-ins as their own rows (exercise = "Bodyweight", weight = kg).
   for (const b of bodyweights) {
     rows.push(
@@ -137,3 +135,4 @@ export function buildWeekCsv(
 
   return rows.join('\n');
 }
+

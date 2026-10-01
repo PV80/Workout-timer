@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "node tests/workoutRecovery.test.cjs && node tests/exerciseMotion.test.cjs",
+    "test": "node tests/workoutRecovery.test.cjs && node tests/exerciseMotion.test.cjs && node tests/dataIntegrity.test.cjs",
     "typecheck": "tsc --noEmit",
     "start": "expo start",
     "android": "expo run:android",

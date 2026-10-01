@@ -1,3 +1,5 @@
+import { assertValidBackup } from './backupValidation';
+import { useWorkoutStore } from '../store/workoutStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { HISTORY_KEYS, useHistoryStore } from '../store/historyStore';
 import { TRACKER_KEYS, useTrackerStore } from '../store/trackerStore';
@@ -62,7 +64,11 @@ export async function restoreFromBackupJson(text: string): Promise<RestoreSummar
     throw new Error('This backup was made by a newer app version.');
   }
 
-  const timingRecords = Array.isArray(data.timingRecords) ? data.timingRecords : [];
+  assertValidBackup(data);
+  if (useWorkoutStore.getState().activeWorkout) {
+    throw new Error('Finish or discard the active workout before restoring a backup.');
+  }
+  const timingRecords = data.timingRecords;
   const sessions = Array.isArray(data.sessions) ? data.sessions : [];
   const trackerEntries = Array.isArray(data.trackerEntries) ? data.trackerEntries : [];
   const bodyweights = Array.isArray(data.bodyweights) ? data.bodyweights : [];
@@ -89,3 +95,4 @@ export async function restoreFromBackupJson(text: string): Promise<RestoreSummar
     bodyweights: bodyweights.length,
   };
 }
+

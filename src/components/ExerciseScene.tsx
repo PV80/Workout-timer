@@ -78,7 +78,8 @@ function equipmentFrame(art:ExerciseArtwork) {
     frame+=worldLine([[0,63,10],[0,1,10]],yaw);
   }
   if(art.equipment==='pullup'){
-    frame+=worldLine([[-40,1,0],[-40,117,0],[40,117,0],[40,1,0]],yaw);
+    const height=art.barHeight??117;
+    frame+=worldLine([[-40,1,0],[-40,height,0],[40,height,0],[40,1,0]],yaw);
     frame+=worldLine([[-48,1,0],[-32,1,0]],yaw)+worldLine([[32,1,0],[48,1,0]],yaw);
   }
   if(art.equipment==='bars')for(const side of [-1,1])frame+=worldLine([[side*20,1,-18],[side*20,74,-18],[side*20,74,20],[side*20,1,20]],yaw);
@@ -127,8 +128,10 @@ export function ExerciseScene({exerciseId,phase,paused=false}:{exerciseId?:strin
   const head=useAnimatedProps(()=>{
     const r=rig.value,h=project(r.head,yaw),s=project(r.shoulder,yaw);
     const angle=Math.atan2(h[0]-s[0],s[1]-h[1]);
+    // Mirror the face locally for prone poses; keep the neck aligned with the spine.
+    const facing=model.faceDown?-1:1;
     // Adapt the SVG transform to the native matrix consumed by Fabric.
-    return {transform:[Math.cos(angle),Math.sin(angle),-Math.sin(angle),Math.cos(angle),h[0],h[1]] as [number,number,number,number,number,number]};
+    return {transform:[facing*Math.cos(angle),facing*Math.sin(angle),-Math.sin(angle),Math.cos(angle),h[0],h[1]] as [number,number,number,number,number,number]};
   },undefined,groupTransformAdapter);
   const neck=useAnimatedProps(()=>({d:worldLine([rig.value.shoulder,rig.value.head],yaw)}));
   const shaft=useAnimatedProps(()=>({d:gear(rig.value,model).shaft}));

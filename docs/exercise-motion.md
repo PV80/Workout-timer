@@ -24,7 +24,7 @@ Movement references were read on 1 October 2026. These are original simplified i
 | Dips | Hands stay on parallel bars while elbows bend and extend | [Muscle and Strength](https://www.muscleandstrength.com/exercises/chest-dip.html) |
 | Meadows landmine rows | Staggered hinge; one arm rows the anchored bar toward the body | [Muscle and Strength](https://www.muscleandstrength.com/exercises/meadows-row) |
 | One arm dumbbell rows | One arm rows toward the hip; illustration uses opposite hand and knee support | [Rowing action reference](https://www.muscleandstrength.com/exercises/one-arm-dumbbell-row.html) |
-| Leg raises | Supported trunk; straight legs rotate about the hips | [Muscle and Strength](https://www.muscleandstrength.com/exercises/lying-floor-leg-raise.html) |
+| Hanging leg raises | Fixed overhead grip, quiet trunk; straight legs lift to hip height and lower without swinging | [Muscle and Strength](https://www.muscleandstrength.com/exercises/hanging-leg-raise.html) |
 | Ab roller | Kneeling rollout; braced torso extends with the wheel and returns | [Rollout movement reference](https://www.muscleandstrength.com/exercises/abdominal-barbell-rollouts.html) |
 | Oblique twists | Seated interpretation: pelvis stays still while shoulders and clasped hands rotate | [Torso rotation reference](https://www.muscleandstrength.com/exercises/russian-twist.html) |
 | Plank | Shoulder, hip and ankle alignment stays still; only subtle breathing changes | [ACE](https://www.acefitness.org/resources/everyone/exercise-library/32/front-plank/) |
@@ -32,3 +32,5 @@ Movement references were read on 1 October 2026. These are original simplified i
 Rest uses a seated pose with fixed contact points and a gentle breathing cue. The rest and plank figures do not perform repeated lifts. Motion stops when paused, backgrounded, or reduced motion is enabled.
 
 The rig checks sample the full range of every movement for finite coordinates and stable segment lengths. Separate checks cover planted feet, supported hands, equipment grip attachment, the landmine radius, and the still plank. Visual approval and physical Android rendering remain separate from these geometric checks.
+
+Prone plank and ab roller faces point toward the floor with necks aligned to the trunk. Supine bench movements retain their upward face orientation. Hanging leg raises retain the `leg-raises` ID so existing records continue to match.

@@ -5,14 +5,18 @@ import { theme } from '../theme';
 import { EntranceView } from './Motion';
 
 const artwork = {
-  training: require('../../assets/artwork/training.jpg'),
+  training: require('../../assets/artwork/training-focus.jpg'),
+  complete: require('../../assets/artwork/session-complete.jpg'),
+  history: require('../../assets/artwork/history-progress.jpg'),
+  tracker: require('../../assets/artwork/tracker-journal.jpg'),
+  backup: require('../../assets/artwork/backup-vault.jpg'),
   recovery: require('../../assets/artwork/recovery.jpg'),
 };
 
-export function ArtworkHero({ kind = 'training', label, title, subtitle, compact = false }: {
-  kind?: keyof typeof artwork; label: string; title: string; subtitle: string; compact?: boolean;
+export function ArtworkHero({ kind = 'training', label, title, subtitle, compact = false, inset = true }: {
+  kind?: keyof typeof artwork; label: string; title: string; subtitle: string; compact?: boolean; inset?: boolean;
 }) {
-  return <EntranceView style={[styles.hero, compact && styles.compact]}>
+  return <EntranceView style={[styles.hero, compact && styles.compact, !inset && { marginHorizontal: 0 }]}>
     <Image source={artwork[kind]} style={StyleSheet.absoluteFill} resizeMode="cover" accessible={false} />
     <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} pointerEvents="none">
       <Defs><LinearGradient id="heroShade" x1="0" y1="0" x2="1" y2="0">

@@ -1,3 +1,7 @@
+import { useHistoryStore } from '../src/store/historyStore';
+import { weekKey } from '../src/utils/week';
+import { ActionGlyph } from '../src/components/ActionGlyph';
+import { ArtworkHero } from '../src/components/ArtworkHero';
 import { PageHeader } from '../src/components/PageHeader';
 import { theme } from '../src/theme';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -233,6 +237,7 @@ function EntryEditor({ entry, onClose }: { entry: TrackerEntry; onClose: () => v
 }
 
 export default function TrackerScreen() {
+  const sessions = useHistoryStore((s) => s.sessions);
   const entries = useTrackerStore((s) => s.entries);
   const bodyweights = useTrackerStore((s) => s.bodyweights);
   const apiKey = useTrackerStore((s) => s.apiKey);
@@ -293,11 +298,14 @@ export default function TrackerScreen() {
       if (typeof result === 'object') {
         Alert.alert('Sharing unavailable', `Files written to:\n${result.savedTo}`);
       }
+      if (typeof result === 'object') return;
       setReviewMode(false);
       Alert.alert('Week exported', 'CSV + JSON backup shared. Enjoy the weekend!', [
         { text: 'Done', onPress: () => router.replace('/') },
         { text: 'Stay here', style: 'cancel' },
       ]);
+    } catch (error: any) {
+      Alert.alert('Export failed', error?.message ?? 'Your records are still saved. Please retry.');
     } finally {
       setBusy(null);
     }
@@ -320,6 +328,7 @@ export default function TrackerScreen() {
   }
 
   async function exportWeek(toExport: TrackerEntry[], bw: BodyweightEntry[], label: string) {
+    try {
     const result = await exportWeekFiles(toExport, bw, label);
     if (result === 'nothing') {
       Alert.alert('Nothing to export', 'No entries for this period yet.');
@@ -327,8 +336,13 @@ export default function TrackerScreen() {
     }
     if (typeof result === 'object') {
       Alert.alert('Sharing unavailable', `Files written to:\n${result.savedTo}`);
+      return false; // Temporary cache files are not a durable backup; do not clear records.
     }
     return true;
+    } catch (error: any) {
+      Alert.alert('Export failed', error?.message ?? 'Your records are still saved. Please retry.');
+      return false;
+    }
   }
 
   function handleCapture() {
@@ -365,13 +379,15 @@ export default function TrackerScreen() {
       Alert.alert('Enter a weight', 'Type your bodyweight in kg, e.g. 82.5');
       return;
     }
-    await addBodyweight(kg);
-    setWeightDraft('');
+    try {
+      await addBodyweight(kg);
+      setWeightDraft('');
+    } catch { Alert.alert('Weight not saved', 'Please retry saving your weight.'); }
   }
 
   function handleExportOlder() {
-    const older = entries.filter((e) => e.weekKey !== week);
-    const olderBw = bodyweights.filter((b) => b.weekKey !== week);
+    const older = entries.filter((e) => e.weekKey < week);
+    const olderBw = bodyweights.filter((b) => b.weekKey < week);
     Alert.alert(
       'Export & clear previous weeks?',
       `Export ${older.length + olderBw.length} item(s) from previous weeks to a CSV, then remove them to start fresh?`,
@@ -403,6 +419,8 @@ export default function TrackerScreen() {
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 140 }}
         keyboardShouldPersistTaps="handled"
       >
+        <ArtworkHero kind="tracker" label="TRAINING JOURNAL" title="Make it count." subtitle="Capture your reps. Keep your progress." compact inset={false} />
+
         {reviewMode && (
           <View style={styles.reviewCard}>
             <Text style={styles.reviewTitle}>Review before export</Text>
@@ -465,7 +483,7 @@ export default function TrackerScreen() {
               </View>
             ) : (
               <View style={styles.busyRow}>
-                <CameraIcon size={16} color={theme.green} />
+                <ActionGlyph kind="capture" size={26} />
                 <Text style={styles.bwPhotoText}>Snap the scale instead</Text>
               </View>
             )}
@@ -564,7 +582,7 @@ export default function TrackerScreen() {
           );
         })}
 
-        {(thisWeek.length > 0 || weekBw.length > 0) && (
+        {(thisWeek.length > 0 || weekBw.length > 0 || sessions.some(s => weekKey(new Date(s.date)) === week && s.setRecords.length > 0)) && (
           <TouchableOpacity
             style={styles.exportBtn}
             onPress={() => exportWeek(thisWeek, weekBw, week)}
@@ -573,7 +591,7 @@ export default function TrackerScreen() {
             accessibilityLabel="Export this week as CSV and JSON backup"
           >
             <View style={styles.busyRow}>
-              <DownloadIcon size={17} color={theme.muted} />
+              <ActionGlyph kind="export" size={26} />
               <Text style={styles.exportText}>Export week (CSV + JSON)</Text>
             </View>
           </TouchableOpacity>
@@ -598,7 +616,7 @@ export default function TrackerScreen() {
                 </View>
               ) : (
                 <View style={styles.busyRow}>
-                  <CameraIcon size={15} color={theme.muted} />
+                  <ActionGlyph kind="capture" size={26} />
                   <Text style={styles.captureAnotherText}>Capture another page</Text>
                 </View>
               )}
@@ -618,7 +636,7 @@ export default function TrackerScreen() {
                 </View>
               ) : (
                 <View style={styles.busyRow}>
-                  <DownloadIcon size={19} color="#000" />
+                  <ActionGlyph kind="export" size={26} onAccent />
                   <Text style={styles.captureText}>Looks good — Export week</Text>
                 </View>
               )}
@@ -640,7 +658,7 @@ export default function TrackerScreen() {
               </View>
             ) : (
               <View style={styles.busyRow}>
-                <CameraIcon size={19} color="#000" />
+                <ActionGlyph kind="capture" size={26} onAccent />
                 <Text style={styles.captureText}>Capture page</Text>
               </View>
             )}

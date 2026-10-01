@@ -1,3 +1,4 @@
+import { theme } from '../../src/theme';
 import { router } from 'expo-router';
 import { useKeepAwake } from 'expo-keep-awake';
 import * as Haptics from 'expo-haptics';
@@ -14,6 +15,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CircularTimer } from '../../src/components/CircularTimer';
 import { SetDots } from '../../src/components/SetDots';
+import { EntranceView, MotionPressable } from '../../src/components/Motion';
+import { ExerciseScene } from '../../src/components/ExerciseScene';
 import {
   AlertTriangleIcon,
   CheckIcon,
@@ -63,7 +66,7 @@ function CtaButton({
     ? [styles.secondaryBtn, { height: compact ? 40 : 48 }]
     : [styles.primaryBtn, { height: compact ? 52 : 64, backgroundColor: background }];
   return (
-    <TouchableOpacity
+    <MotionPressable
       style={base}
       onPress={handlePress}
       activeOpacity={secondary ? 0.7 : 0.85}
@@ -83,7 +86,7 @@ function CtaButton({
           {label}
         </Text>
       </View>
-    </TouchableOpacity>
+    </MotionPressable>
   );
 }
 
@@ -181,9 +184,9 @@ export default function WorkoutScreen() {
   }, []);
 
   const elapsedColor = (() => {
-    if (duration.elapsedSeconds >= settings.warningWorkoutMinutes * 60) return '#EF4444';
-    if (duration.elapsedSeconds >= settings.targetWorkoutMinutes * 60) return '#F59E0B';
-    return '#F0F0F0';
+    if (duration.elapsedSeconds >= settings.warningWorkoutMinutes * 60) return theme.red;
+    if (duration.elapsedSeconds >= settings.targetWorkoutMinutes * 60) return theme.amber;
+    return theme.text;
   })();
 
   if (!exercise || !activeWorkout) return null;
@@ -207,9 +210,9 @@ export default function WorkoutScreen() {
   })();
 
   const timerColor = (() => {
-    if (isCountdown && isOvertime) return '#EF4444';
-    if (isAmrap) return '#22D46E';
-    return '#F0F0F0';
+    if (isCountdown && isOvertime) return theme.red;
+    if (isAmrap) return theme.green;
+    return theme.text;
   })();
 
   const progressBarWidth = `${(duration.progressToTarget * 100).toFixed(0)}%`;
@@ -229,10 +232,10 @@ export default function WorkoutScreen() {
     settings,
   });
   const etaColor = (() => {
-    if (!liveEstimate) return '#888';
-    if (liveEstimate.totalSeconds >= settings.warningWorkoutMinutes * 60) return '#EF4444';
-    if (liveEstimate.totalSeconds >= settings.targetWorkoutMinutes * 60) return '#F59E0B';
-    return '#22D46E';
+    if (!liveEstimate) return theme.muted;
+    if (liveEstimate.totalSeconds >= settings.warningWorkoutMinutes * 60) return theme.red;
+    if (liveEstimate.totalSeconds >= settings.targetWorkoutMinutes * 60) return theme.amber;
+    return theme.green;
   })();
   const etaText = (() => {
     if (!liveEstimate) return '';
@@ -271,14 +274,15 @@ export default function WorkoutScreen() {
           isOvertime={isOvertime}
           progress={progress}
           size={ringSize}
+          paused={isPaused}
         />
         <View style={styles.timerCenter}>
           <Text
-            style={[styles.timerText, { fontSize: timerFontSize, lineHeight: timerFontSize + 8, color: isPaused ? '#888' : timerColor }]}
+            style={[styles.timerText, { fontSize: timerFontSize, lineHeight: timerFontSize + 8, color: isPaused ? theme.muted : timerColor }]}
           >
             {timerLabel}
           </Text>
-          <Text style={[styles.timerSubLabel, isCountdown && isOvertime ? { color: '#EF4444' } : {}]}>
+          <Text style={[styles.timerSubLabel, isCountdown && isOvertime ? { color: theme.red } : {}]}>
             {subLabel}
           </Text>
         </View>
@@ -287,10 +291,11 @@ export default function WorkoutScreen() {
         totalSets={exercise.sets}
         currentSet={currentSetNumber}
         completedSets={currentSetNumber - 1}
+        paused={isPaused}
       />
       {targetDuration && !isAmrap ? (
         <Text style={styles.targetDuration}>
-          target: <Text style={{ color: '#F0F0F0' }}>{formatTime(targetDuration)}</Text>
+          target: <Text style={{ color: theme.text }}>{formatTime(targetDuration)}</Text>
         </Text>
       ) : null}
       {isAmrap && !isCompact ? (
@@ -299,12 +304,15 @@ export default function WorkoutScreen() {
     </View>
   );
 
-  const ctas = isTransition ? (
+  const ctas = isPaused ? (
+    <CtaButton label="RESUME WORKOUT" icon={<PlayIcon size={16} color="#000" />}
+      background={theme.green} textColor="#000" onPress={handleTogglePause} compact={isCompact} />
+  ) : isTransition ? (
     <>
       <CtaButton
         label="START NEXT EXERCISE"
         icon={<PlayIcon size={16} color="#000" />}
-        background="#F59E0B"
+        background={theme.amber}
         textColor="#000"
         onPress={() => handleContinueToNext(true)}
         compact={isCompact}
@@ -316,7 +324,7 @@ export default function WorkoutScreen() {
       <CtaButton
         label="START NEXT SET"
         icon={<PlayIcon size={16} color="#fff" />}
-        background="#3B82F6"
+        background={theme.blue}
         textColor="#fff"
         onPress={handleStartNextSet}
         compact={isCompact}
@@ -327,7 +335,7 @@ export default function WorkoutScreen() {
     <CtaButton
       label="DONE"
       icon={<CheckIcon size={18} color="#000" strokeWidth={3} />}
-      background="#22D46E"
+      background={theme.green}
       textColor="#000"
       onPress={handleCompleteSet}
       compact={isCompact}
@@ -348,9 +356,9 @@ export default function WorkoutScreen() {
             } catch { handleSaveFailure(); }
           }}
           accessibilityRole="button" accessibilityLabel="Retry saving workout"
-          style={{ padding: 12, backgroundColor: '#1C1C1C' }}
+          style={{ padding: 12, backgroundColor: theme.raised }}
         >
-          <Text style={{ color: '#F59E0B', textAlign: 'center' }}>
+          <Text style={{ color: theme.amber, textAlign: 'center' }}>
             Progress could not be saved. Keep the app open. Tap to retry.
           </Text>
         </TouchableOpacity>
@@ -363,7 +371,7 @@ export default function WorkoutScreen() {
           accessibilityRole="button"
           accessibilityLabel="Abandon workout"
         >
-          <XIcon size={20} color="#888" />
+          <XIcon size={20} color={theme.muted} />
         </TouchableOpacity>
         <View style={styles.clockBlock}>
           <Text style={[styles.elapsed, { color: elapsedColor }]}>
@@ -383,7 +391,7 @@ export default function WorkoutScreen() {
           accessibilityRole="button"
           accessibilityLabel={isPaused ? 'Resume timer' : 'Pause timer'}
         >
-          {isPaused ? <PlayIcon size={18} color="#22D46E" /> : <PauseIcon size={18} color="#888" />}
+          {isPaused ? <PlayIcon size={18} color={theme.green} /> : <PauseIcon size={18} color={theme.muted} />}
         </TouchableOpacity>
         <View style={styles.progressArea}>
           <View style={styles.progressTrack}>
@@ -394,7 +402,15 @@ export default function WorkoutScreen() {
       </View>
 
       {/* Exercise info */}
-      <View style={[styles.exerciseBlock, isCompact && styles.exerciseBlockCompact]}>
+      <EntranceView trigger={`${exercise.id}:${currentPhase}:${isPaused}`} style={[styles.exerciseBlock, isCompact && styles.exerciseBlockCompact]}>
+        <View style={styles.phaseRow}>
+          <View style={[styles.phaseBadge, { borderColor: isPaused ? theme.muted : isBreak ? theme.blue : isTransition ? theme.amber : theme.green }]}>
+            <Text style={[styles.phaseText, { color: isPaused ? theme.muted : isBreak ? theme.blue : isTransition ? theme.amber : theme.green }]}>
+              {isPaused ? 'PAUSED' : isBreak ? 'RECOVER' : isTransition ? 'GET READY' : 'IN THE ZONE'}
+            </Text>
+          </View>
+          <Text style={styles.sessionLabel}>{activeWorkout.name}</Text>
+        </View>
         <View style={styles.exerciseTitleRow}>
           <Text
             style={[styles.exerciseName, isCompact && styles.exerciseNameCompact]}
@@ -417,7 +433,7 @@ export default function WorkoutScreen() {
         ]}>
           {midLabel}
         </Text>
-      </View>
+      </EntranceView>
 
       {isCompact ? (
         /* Split-screen layout: ring on the left, actions on the right. */
@@ -428,7 +444,12 @@ export default function WorkoutScreen() {
       ) : (
         <>
           <View style={styles.timerContainer}>{ringBlock}</View>
-          <View style={{ flex: 1 }} />
+          <View style={styles.sceneSpace}>
+            {height >= 700 && <ExerciseScene
+              exerciseId={isTransition ? nextEx?.id : exercise.id}
+              phase={currentPhase} paused={isPaused}
+            />}
+          </View>
           <View style={styles.ctaBlock}>{ctas}</View>
         </>
       )}
@@ -437,7 +458,7 @@ export default function WorkoutScreen() {
       {duration.shouldShowWarning && !warningDismissed && (
         <View style={styles.warningOverlay}>
           <View style={styles.warningCard}>
-            <AlertTriangleIcon size={36} color="#EF4444" />
+            <AlertTriangleIcon size={36} color={theme.red} />
             <Text style={styles.warningTitle}>2 Hours In</Text>
             <Text style={styles.warningBody}>
               You've been training for over 2 hours. Consider wrapping up or finishing your last exercise.
@@ -462,46 +483,51 @@ function handleSaveFailure() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#0A0A0A' },
+  screen: { flex: 1, backgroundColor: theme.background },
 
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingTop: 8,
   },
-  headerBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerBtn: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center' },
   clockBlock: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   elapsed: { textAlign: 'center', fontSize: 17, fontWeight: '700', fontVariant: ['tabular-nums'] },
   eta: { marginTop: 1, fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  etaLabel: { marginTop: 1, fontSize: 10, color: '#666', textTransform: 'uppercase', letterSpacing: 1 },
+  etaLabel: { marginTop: 1, fontSize: 10, color: theme.subtle, textTransform: 'uppercase', letterSpacing: 1 },
   progressArea: { alignItems: 'flex-end', gap: 4, marginLeft: 8 },
-  progressTrack: { width: 64, height: 4, borderRadius: 2, backgroundColor: '#1C1C1C', overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: '#22D46E', borderRadius: 2 },
-  targetLabel: { fontSize: 10, color: '#888' },
+  progressTrack: { width: 64, height: 4, borderRadius: 2, backgroundColor: theme.raised, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: theme.green, borderRadius: 2 },
+  targetLabel: { fontSize: 10, color: theme.muted },
 
-  exerciseBlock: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 },
-  exerciseBlockCompact: { paddingTop: 2, paddingBottom: 2 },
+  phaseRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  phaseBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5, backgroundColor: theme.surface },
+  phaseText: { fontSize: 9, fontWeight: '800', letterSpacing: 1.5 },
+  sessionLabel: { fontSize: 10, color: theme.subtle, fontWeight: '700', letterSpacing: 1.5 },
+  exerciseBlock: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 8 },
+  exerciseBlockCompact: { paddingTop: 4, paddingBottom: 2 },
   exerciseTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  exerciseName: { flex: 1, fontSize: 20, fontWeight: '700', color: '#F0F0F0', lineHeight: 26 },
+  exerciseName: { flex: 1, fontSize: 25, fontWeight: '800', color: theme.text, lineHeight: 31, letterSpacing: -0.6 },
   exerciseNameCompact: { fontSize: 16, lineHeight: 20 },
   t1Badge: { backgroundColor: 'rgba(245,158,11,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
-  t1Text: { color: '#F59E0B', fontSize: 10, fontWeight: '800' },
+  t1Text: { color: theme.amber, fontSize: 10, fontWeight: '800' },
   amrapBadge: { backgroundColor: 'rgba(59,130,246,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
-  amrapText: { color: '#3B82F6', fontSize: 10, fontWeight: '800' },
-  setProgress: { fontSize: 14, fontWeight: '500', color: '#888', marginTop: 6 },
+  amrapText: { color: theme.blue, fontSize: 10, fontWeight: '800' },
+  setProgress: { fontSize: 14, fontWeight: '500', color: theme.muted, marginTop: 6 },
   setProgressCompact: { fontSize: 12, marginTop: 2 },
-  setProgressBreak: { color: '#3B82F6' },
-  setProgressTransition: { color: '#F59E0B' },
+  setProgressBreak: { color: theme.blue },
+  setProgressTransition: { color: theme.amber },
 
-  timerContainer: { alignItems: 'center', paddingTop: 24, paddingBottom: 8 },
+  timerContainer: { alignItems: 'center', paddingTop: 18, paddingBottom: 8 },
+  sceneSpace: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   ringBlock: { alignItems: 'center', gap: 10 },
   timerCenter: {
     position: 'absolute',
     alignItems: 'center', justifyContent: 'center',
   },
   timerText: { fontWeight: '900', letterSpacing: -2, fontVariant: ['tabular-nums'] },
-  timerSubLabel: { fontSize: 12, fontWeight: '500', color: '#888', textTransform: 'uppercase', letterSpacing: 2, marginTop: 4 },
-  targetDuration: { fontSize: 12, color: '#888' },
-  amrapHint: { fontSize: 12, color: '#888' },
+  timerSubLabel: { fontSize: 12, fontWeight: '500', color: theme.muted, textTransform: 'uppercase', letterSpacing: 2, marginTop: 4 },
+  targetDuration: { fontSize: 12, color: theme.muted },
+  amrapHint: { fontSize: 12, color: theme.muted },
 
   compactRow: {
     flex: 1, flexDirection: 'row', alignItems: 'center',
@@ -510,19 +536,19 @@ const styles = StyleSheet.create({
   compactCtas: { flex: 1, gap: 8, justifyContent: 'center' },
 
   ctaBlock: {
-    padding: 16, paddingBottom: 32, gap: 10,
+    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, gap: 10,
   },
   primaryBtn: {
-    borderRadius: 16,
+    borderRadius: 18,
     alignItems: 'center', justifyContent: 'center',
     elevation: 8,
   },
   primaryBtnText: { fontSize: 17, fontWeight: '800' },
   secondaryBtn: {
-    borderRadius: 12, borderWidth: 1.5, borderColor: '#262626',
+    borderRadius: 16, borderWidth: 1.5, borderColor: theme.border,
     alignItems: 'center', justifyContent: 'center',
   },
-  secondaryBtnText: { color: '#888', fontSize: 15, fontWeight: '600' },
+  secondaryBtnText: { color: theme.muted, fontSize: 15, fontWeight: '600' },
   btnRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12 },
 
   warningOverlay: {
@@ -532,14 +558,14 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   warningCard: {
-    backgroundColor: '#1C1C1C', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)',
+    backgroundColor: theme.raised, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)',
     borderRadius: 20, padding: 32, width: '100%', maxWidth: 420, alignItems: 'center',
   },
-  warningTitle: { fontSize: 24, fontWeight: '800', color: '#F0F0F0', marginTop: 16, textAlign: 'center' },
-  warningBody: { fontSize: 14, lineHeight: 22, color: '#888', textAlign: 'center', marginTop: 8 },
+  warningTitle: { fontSize: 24, fontWeight: '800', color: theme.text, marginTop: 16, textAlign: 'center' },
+  warningBody: { fontSize: 14, lineHeight: 22, color: theme.muted, textAlign: 'center', marginTop: 8 },
   warningBtn: {
     marginTop: 28, width: '100%', height: 56, borderRadius: 14,
-    backgroundColor: '#22D46E', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: theme.green, alignItems: 'center', justifyContent: 'center',
   },
   warningBtnText: { color: '#000', fontSize: 16, fontWeight: '800' },
 });

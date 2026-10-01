@@ -13,7 +13,15 @@ import {
   setupNotifications,
 } from '../src/utils/notificationService';
 import { warmUpAlert } from '../src/utils/alertService';
+import { MotionProvider, useMotionEnabled } from '../src/components/Motion';
+import { theme } from '../src/theme';
+
 export default function RootLayout() {
+  return <MotionProvider><RootNavigator /></MotionProvider>;
+}
+
+function RootNavigator() {
+  const motionEnabled = useMotionEnabled();
   const hydrateTracker = useTrackerStore((s) => s.hydrate);
   const [ready, setReady] = useState(false);
   const [recoveryError, setRecoveryError] = useState(false);
@@ -44,7 +52,7 @@ export default function RootLayout() {
 
   if (!ready) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#0A0A0A', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <View style={{ flex: 1, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <StatusBar style="light" />
         {recoveryError ? (
           <>
@@ -61,10 +69,10 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#0A0A0A' }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.background }}>
       <SafeAreaProvider>
         <StatusBar style="light" />
-        <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
+        <Stack screenOptions={{ headerShown: false, animation: motionEnabled ? 'fade_from_bottom' : 'none', contentStyle: { backgroundColor: theme.background } }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="workout/index" />
           <Stack.Screen name="complete" />

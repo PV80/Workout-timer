@@ -1,3 +1,5 @@
+import { PageHeader } from '../src/components/PageHeader';
+import { theme } from '../src/theme';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -177,7 +179,7 @@ function EntryEditor({ entry, onClose }: { entry: TrackerEntry; onClose: () => v
                     onChangeText={(v) => patch(i, j, 'duration', v)}
                     keyboardType="numeric"
                     placeholder="–"
-                    placeholderTextColor="#555"
+                    placeholderTextColor={theme.subtle}
                   />
                   <Text style={styles.editUnit}>sec</Text>
                 </>
@@ -189,7 +191,7 @@ function EntryEditor({ entry, onClose }: { entry: TrackerEntry; onClose: () => v
                     onChangeText={(v) => patch(i, j, 'reps', v)}
                     keyboardType="numeric"
                     placeholder="reps"
-                    placeholderTextColor="#555"
+                    placeholderTextColor={theme.subtle}
                   />
                   <Text style={styles.editUnit}>×</Text>
                   <TextInput
@@ -198,7 +200,7 @@ function EntryEditor({ entry, onClose }: { entry: TrackerEntry; onClose: () => v
                     onChangeText={(v) => patch(i, j, 'weight', v)}
                     keyboardType="decimal-pad"
                     placeholder="bw"
-                    placeholderTextColor="#555"
+                    placeholderTextColor={theme.subtle}
                   />
                   <Text style={styles.editUnit}>kg</Text>
                 </>
@@ -214,7 +216,7 @@ function EntryEditor({ entry, onClose }: { entry: TrackerEntry; onClose: () => v
         value={notes}
         onChangeText={setNotes}
         placeholder="Notes / PRs / form cues"
-        placeholderTextColor="#555"
+        placeholderTextColor={theme.subtle}
         multiline
       />
 
@@ -395,17 +397,7 @@ export default function TrackerScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <ChevronLeftIcon size={24} color="#888" />
-        </TouchableOpacity>
-        <Text style={styles.title}>TRACKER</Text>
-      </View>
+      <PageHeader title="Tracker" subtitle="Your training week, in one place." />
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 140 }}
@@ -437,7 +429,7 @@ export default function TrackerScreen() {
             </Text>
             <View style={styles.rolloverActionRow}>
               <Text style={styles.rolloverAction}>EXPORT & CLEAR</Text>
-              <ChevronRightIcon size={13} color="#3B82F6" strokeWidth={3} />
+              <ChevronRightIcon size={13} color={theme.blue} strokeWidth={3} />
             </View>
           </TouchableOpacity>
         )}
@@ -450,7 +442,7 @@ export default function TrackerScreen() {
               value={weightDraft}
               onChangeText={setWeightDraft}
               placeholder="e.g. 82.5"
-              placeholderTextColor="#555"
+              placeholderTextColor={theme.subtle}
               keyboardType="decimal-pad"
               returnKeyType="done"
               onSubmitEditing={handleAddWeight}
@@ -468,12 +460,12 @@ export default function TrackerScreen() {
           >
             {busy === 'weighing' ? (
               <View style={styles.busyRow}>
-                <ActivityIndicator color="#22D46E" />
+                <ActivityIndicator color={theme.green} />
                 <Text style={styles.bwPhotoText}>Reading scale…</Text>
               </View>
             ) : (
               <View style={styles.busyRow}>
-                <CameraIcon size={16} color="#22D46E" />
+                <CameraIcon size={16} color={theme.green} />
                 <Text style={styles.bwPhotoText}>Snap the scale instead</Text>
               </View>
             )}
@@ -525,9 +517,9 @@ export default function TrackerScreen() {
                   </Text>
                 </View>
                 {expanded ? (
-                  <ChevronDownIcon size={16} color="#888" />
+                  <ChevronDownIcon size={16} color={theme.muted} />
                 ) : (
-                  <ChevronRightIcon size={16} color="#888" />
+                  <ChevronRightIcon size={16} color={theme.muted} />
                 )}
               </TouchableOpacity>
 
@@ -581,7 +573,7 @@ export default function TrackerScreen() {
             accessibilityLabel="Export this week as CSV and JSON backup"
           >
             <View style={styles.busyRow}>
-              <DownloadIcon size={17} color="#888" />
+              <DownloadIcon size={17} color={theme.muted} />
               <Text style={styles.exportText}>Export week (CSV + JSON)</Text>
             </View>
           </TouchableOpacity>
@@ -601,12 +593,12 @@ export default function TrackerScreen() {
             >
               {busy === 'capturing' ? (
                 <View style={styles.busyRow}>
-                  <ActivityIndicator color="#888" />
+                  <ActivityIndicator color={theme.muted} />
                   <Text style={styles.captureAnotherText}>Reading page…</Text>
                 </View>
               ) : (
                 <View style={styles.busyRow}>
-                  <CameraIcon size={15} color="#888" />
+                  <CameraIcon size={15} color={theme.muted} />
                   <Text style={styles.captureAnotherText}>Capture another page</Text>
                 </View>
               )}
@@ -660,128 +652,129 @@ export default function TrackerScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#0A0A0A' },
+  screen: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4,
   },
   backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -10 },
-  title: { flex: 1, fontSize: 18, fontWeight: '700', color: '#F0F0F0' },
+  title: { flex: 1, fontSize: 18, fontWeight: '700', color: theme.text },
 
   reviewCard: {
     backgroundColor: 'rgba(34,212,110,0.08)', borderWidth: 1, borderColor: 'rgba(34,212,110,0.35)',
-    borderRadius: 12, padding: 16, marginTop: 12,
+    borderRadius: 18, padding: 16, marginTop: 12,
   },
-  reviewTitle: { fontSize: 14, fontWeight: '700', color: '#22D46E' },
-  reviewBody: { fontSize: 13, color: '#888', marginTop: 6, lineHeight: 19 },
+  reviewTitle: { fontSize: 14, fontWeight: '700', color: theme.green },
+  reviewBody: { fontSize: 13, color: theme.muted, marginTop: 6, lineHeight: 19 },
 
   warnCard: {
     backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)',
-    borderRadius: 12, padding: 16, marginTop: 12,
+    borderRadius: 18, padding: 16, marginTop: 12,
   },
-  warnTitle: { fontSize: 14, fontWeight: '700', color: '#F59E0B' },
-  warnBody: { fontSize: 13, color: '#888', marginTop: 6, lineHeight: 19 },
+  warnTitle: { fontSize: 14, fontWeight: '700', color: theme.amber },
+  warnBody: { fontSize: 13, color: theme.muted, marginTop: 6, lineHeight: 19 },
 
   rolloverCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: 'rgba(59,130,246,0.10)', borderWidth: 1, borderColor: 'rgba(59,130,246,0.35)',
-    borderRadius: 12, padding: 16, marginTop: 12,
+    borderRadius: 18, padding: 16, marginTop: 12,
   },
-  rolloverText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#F0F0F0' },
+  rolloverText: { flex: 1, fontSize: 13, fontWeight: '600', color: theme.text },
   rolloverActionRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  rolloverAction: { fontSize: 12, fontWeight: '800', color: '#3B82F6', letterSpacing: 0.5 },
+  rolloverAction: { fontSize: 12, fontWeight: '800', color: theme.blue, letterSpacing: 0.5 },
 
   sectionLabel: {
-    fontSize: 11, fontWeight: '600', color: '#888', textTransform: 'uppercase',
+    fontSize: 11, fontWeight: '600', color: theme.muted, textTransform: 'uppercase',
     letterSpacing: 1.5, marginTop: 24, marginBottom: 8,
   },
-  empty: { fontSize: 14, color: '#888', lineHeight: 22, paddingVertical: 8 },
+  empty: { fontSize: 14, color: theme.muted, lineHeight: 22, paddingVertical: 8 },
 
   bwInputRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16 },
   bwInput: {
     flex: 1, height: 44, borderRadius: 8, paddingHorizontal: 12,
-    backgroundColor: '#1C1C1C', borderWidth: 1, borderColor: '#2A2A2A',
-    color: '#F0F0F0', fontSize: 16, fontVariant: ['tabular-nums'],
+    backgroundColor: theme.raised, borderWidth: 1, borderColor: theme.border,
+    color: theme.text, fontSize: 16, fontVariant: ['tabular-nums'],
   },
-  bwUnit: { fontSize: 15, color: '#888', fontWeight: '600' },
-  bwAddBtn: { height: 44, paddingHorizontal: 18, borderRadius: 8, backgroundColor: '#22D46E', alignItems: 'center', justifyContent: 'center' },
+  bwUnit: { fontSize: 15, color: theme.muted, fontWeight: '600' },
+  bwAddBtn: { height: 44, paddingHorizontal: 18, borderRadius: 8, backgroundColor: theme.green, alignItems: 'center', justifyContent: 'center' },
   bwAddText: { color: '#000', fontWeight: '800', fontSize: 14 },
   bwPhotoBtn: {
     marginHorizontal: 16, marginBottom: 4, height: 44, borderRadius: 8,
     borderWidth: 1.5, borderColor: 'rgba(34,212,110,0.4)',
     alignItems: 'center', justifyContent: 'center',
   },
-  bwPhotoText: { color: '#22D46E', fontWeight: '700', fontSize: 14 },
-  bwHint: { fontSize: 12, color: '#888', paddingHorizontal: 16, paddingBottom: 14, lineHeight: 18 },
+  bwPhotoText: { color: theme.green, fontWeight: '700', fontSize: 14 },
+  bwHint: { fontSize: 12, color: theme.muted, paddingHorizontal: 16, paddingBottom: 14, lineHeight: 18 },
   bwRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#1A1A1A',
+    paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: theme.border,
   },
-  bwDate: { fontSize: 13, color: '#888' },
-  bwKg: { fontSize: 15, color: '#F0F0F0', fontWeight: '700', fontVariant: ['tabular-nums'] },
+  bwDate: { fontSize: 13, color: theme.muted },
+  bwKg: { fontSize: 15, color: theme.text, fontWeight: '700', fontVariant: ['tabular-nums'] },
 
-  card: { backgroundColor: '#111', borderWidth: 1, borderColor: '#2A2A2A', borderRadius: 12, marginBottom: 10 },
+  card: { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 18, marginBottom: 10 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: '#F0F0F0' },
-  cardMeta: { fontSize: 12, color: '#888', marginTop: 4 },
-  cardBody: { paddingHorizontal: 16, paddingBottom: 12, borderTopWidth: 1, borderTopColor: '#1A1A1A', paddingTop: 8 },
-  exRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1A1A1A' },
-  exName: { fontSize: 14, fontWeight: '500', color: '#F0F0F0' },
-  exTarget: { fontSize: 12, color: '#666', fontWeight: '400' },
-  exSets: { fontSize: 13, color: '#888', marginTop: 3, fontVariant: ['tabular-nums'] },
-  entryNotes: { fontSize: 12, color: '#888', marginTop: 10, lineHeight: 18, fontStyle: 'italic' },
-  legend: { fontSize: 11, color: '#555', marginTop: 8 },
+  cardTitle: { fontSize: 15, fontWeight: '600', color: theme.text },
+  cardMeta: { fontSize: 12, color: theme.muted, marginTop: 4 },
+  cardBody: { paddingHorizontal: 16, paddingBottom: 12, borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 8 },
+  exRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.border },
+  exName: { fontSize: 14, fontWeight: '500', color: theme.text },
+  exTarget: { fontSize: 12, color: theme.subtle, fontWeight: '400' },
+  exSets: { fontSize: 13, color: theme.muted, marginTop: 3, fontVariant: ['tabular-nums'] },
+  entryNotes: { fontSize: 12, color: theme.muted, marginTop: 10, lineHeight: 18, fontStyle: 'italic' },
+  legend: { fontSize: 11, color: theme.subtle, marginTop: 8 },
   entryActions: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingTop: 14, paddingBottom: 4,
   },
-  editText: { fontSize: 13, color: '#22D46E', fontWeight: '700' },
-  deleteText: { fontSize: 13, color: '#EF4444', fontWeight: '600' },
+  editText: { fontSize: 13, color: theme.green, fontWeight: '700' },
+  deleteText: { fontSize: 13, color: theme.red, fontWeight: '600' },
 
-  editExercise: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1A1A1A' },
+  editExercise: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.border },
   editSetRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
-  editSetLabel: { width: 26, fontSize: 12, fontWeight: '700', color: '#888' },
+  editSetLabel: { width: 26, fontSize: 12, fontWeight: '700', color: theme.muted },
   editInput: {
     width: 64, height: 40, borderRadius: 8, paddingHorizontal: 10, textAlign: 'center',
-    backgroundColor: '#1C1C1C', borderWidth: 1, borderColor: '#2A2A2A',
-    color: '#F0F0F0', fontSize: 14, fontVariant: ['tabular-nums'],
+    backgroundColor: theme.raised, borderWidth: 1, borderColor: theme.border,
+    color: theme.text, fontSize: 14, fontVariant: ['tabular-nums'],
   },
-  editUnit: { fontSize: 13, color: '#888' },
-  editRaw: { flex: 1, fontSize: 11, color: '#555', textAlign: 'right' },
+  editUnit: { fontSize: 13, color: theme.muted },
+  editRaw: { flex: 1, fontSize: 11, color: theme.subtle, textAlign: 'right' },
   editNotes: {
     marginTop: 12, minHeight: 56, borderRadius: 8, padding: 10,
-    backgroundColor: '#1C1C1C', borderWidth: 1, borderColor: '#2A2A2A',
-    color: '#F0F0F0', fontSize: 13, textAlignVertical: 'top',
+    backgroundColor: theme.raised, borderWidth: 1, borderColor: theme.border,
+    color: theme.text, fontSize: 13, textAlignVertical: 'top',
   },
   editBtnRow: { flexDirection: 'row', gap: 8, marginTop: 12, marginBottom: 4 },
   editSaveBtn: {
-    flex: 1, height: 44, borderRadius: 8, backgroundColor: '#22D46E',
+    flex: 1, height: 44, borderRadius: 8, backgroundColor: theme.green,
     alignItems: 'center', justifyContent: 'center',
   },
   editSaveText: { color: '#000', fontWeight: '800', fontSize: 14 },
   editCancelBtn: {
-    flex: 1, height: 44, borderRadius: 8, borderWidth: 1, borderColor: '#2A2A2A',
+    flex: 1, height: 44, borderRadius: 8, borderWidth: 1, borderColor: theme.border,
     alignItems: 'center', justifyContent: 'center',
   },
-  editCancelText: { color: '#888', fontWeight: '600', fontSize: 14 },
+  editCancelText: { color: theme.muted, fontWeight: '600', fontSize: 14 },
 
   exportBtn: {
-    marginTop: 16, height: 48, borderRadius: 12, borderWidth: 1.5, borderColor: '#262626',
+    marginTop: 16, height: 48, borderRadius: 18, borderWidth: 1.5, borderColor: theme.border,
     alignItems: 'center', justifyContent: 'center',
   },
-  exportText: { fontSize: 15, fontWeight: '600', color: '#888' },
+  exportText: { fontSize: 15, fontWeight: '600', color: theme.muted },
 
   ctaContainer: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 16, paddingBottom: 32, gap: 10 },
   captureAnotherBtn: {
-    height: 44, borderRadius: 12, borderWidth: 1.5, borderColor: '#262626',
-    alignItems: 'center', justifyContent: 'center', backgroundColor: '#0A0A0A',
+    height: 44, borderRadius: 18, borderWidth: 1.5, borderColor: theme.border,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background,
   },
-  captureAnotherText: { color: '#888', fontSize: 14, fontWeight: '600' },
+  captureAnotherText: { color: theme.muted, fontSize: 14, fontWeight: '600' },
   captureBtn: {
-    height: 64, borderRadius: 16, backgroundColor: '#22D46E',
+    height: 64, borderRadius: 16, backgroundColor: theme.green,
     alignItems: 'center', justifyContent: 'center',
   },
   captureBtnBusy: { opacity: 0.85 },
   busyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   captureText: { color: '#000', fontSize: 17, fontWeight: '800' },
 });
+

@@ -1,11 +1,13 @@
+import { theme } from '../src/theme';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity,
+  ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput,
   useWindowDimensions, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraIcon, CheckIcon, DownloadIcon } from '../src/components/icons';
+import { EntranceView, MotionPressable } from '../src/components/Motion';
 import { useHistoryStore } from '../src/store/historyStore';
 import { useTrackerStore, currentWeekKey } from '../src/store/trackerStore';
 import { exportCurrentWeek } from '../src/utils/exportWeek';
@@ -96,9 +98,9 @@ export default function CompleteScreen() {
   if (!latest) {
     return (
       <SafeAreaView style={styles.screen}>
-        <TouchableOpacity style={styles.doneBtn} onPress={() => router.replace('/')}>
+        <MotionPressable style={styles.doneBtn} onPress={() => router.replace('/')}>
           <Text style={styles.doneBtnText}>DONE</Text>
-        </TouchableOpacity>
+        </MotionPressable>
       </SafeAreaView>
     );
   }
@@ -118,16 +120,17 @@ export default function CompleteScreen() {
         contentContainerStyle={{ paddingBottom: isCompact ? 130 : 140 }}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={[styles.hero, isCompact && styles.heroCompact]}>
-          <View style={[styles.checkCircle, isCompact && styles.checkCircleCompact]}>
+        <EntranceView style={[styles.hero, isCompact && styles.heroCompact]}>
+          <Text style={styles.savedLabel}>SESSION SAVED</Text>
+          <EntranceView delay={80} style={[styles.checkCircle, isCompact && styles.checkCircleCompact]}>
             <CheckIcon size={isCompact ? 26 : 38} color="#fff" strokeWidth={3} />
-          </View>
+          </EntranceView>
           <Text style={[styles.title, isCompact && styles.titleCompact]}>WORKOUT COMPLETE</Text>
           <Text style={[styles.duration, isCompact && styles.durationCompact]}>
             {formatHoursMinutes(totalDuration)}
           </Text>
           <Text style={styles.durationLabel}>total time</Text>
-        </View>
+        </EntranceView>
 
         <View style={styles.statsCard}>
           <View>
@@ -155,7 +158,7 @@ export default function CompleteScreen() {
             <Text style={styles.bwTitle}>Week wrap-up</Text>
             {weekExported ? (
               <View style={styles.bwSavedRow}>
-                <CheckIcon size={16} color="#22D46E" strokeWidth={3} />
+                <CheckIcon size={16} color={theme.green} strokeWidth={3} />
                 <Text style={styles.bwSaved}>Week exported — enjoy the weekend.</Text>
               </View>
             ) : (
@@ -164,7 +167,7 @@ export default function CompleteScreen() {
                   Friday's the last session of the week — logging the tracker page below takes you
                   to review the week's entries, then export. Or export directly:
                 </Text>
-                <TouchableOpacity
+                <MotionPressable
                   style={styles.exportWeekBtn}
                   onPress={exportThisWeek}
                   activeOpacity={0.8}
@@ -172,10 +175,10 @@ export default function CompleteScreen() {
                   accessibilityLabel="Export this week"
                 >
                   <View style={styles.busyRow}>
-                    <DownloadIcon size={16} color="#22D46E" />
+                    <DownloadIcon size={16} color={theme.green} />
                     <Text style={styles.exportWeekText}>Export week (CSV + JSON)</Text>
                   </View>
-                </TouchableOpacity>
+                </MotionPressable>
               </>
             )}
           </View>
@@ -186,7 +189,7 @@ export default function CompleteScreen() {
             <Text style={styles.bwTitle}>Monday weigh-in</Text>
             {weightSaved ? (
               <View style={styles.bwSavedRow}>
-                <CheckIcon size={16} color="#22D46E" strokeWidth={3} />
+                <CheckIcon size={16} color={theme.green} strokeWidth={3} />
                 <Text style={styles.bwSaved}>Bodyweight saved — it'll be in this week's CSV.</Text>
               </View>
             ) : (
@@ -197,17 +200,17 @@ export default function CompleteScreen() {
                     value={weightDraft}
                     onChangeText={setWeightDraft}
                     placeholder="e.g. 82.5"
-                    placeholderTextColor="#555"
+                    placeholderTextColor={theme.subtle}
                     keyboardType="decimal-pad"
                     returnKeyType="done"
                     onSubmitEditing={saveWeight}
                   />
                   <Text style={styles.bwUnit}>kg</Text>
-                  <TouchableOpacity style={styles.bwAddBtn} onPress={saveWeight} disabled={weighing}>
+                  <MotionPressable style={styles.bwAddBtn} onPress={saveWeight} disabled={weighing}>
                     <Text style={styles.bwAddText}>Save</Text>
-                  </TouchableOpacity>
+                  </MotionPressable>
                 </View>
-                <TouchableOpacity
+                <MotionPressable
                   style={styles.bwPhotoBtn}
                   onPress={() => weighByPhoto()}
                   disabled={weighing}
@@ -215,16 +218,16 @@ export default function CompleteScreen() {
                 >
                   {weighing ? (
                     <View style={styles.busyRow}>
-                      <ActivityIndicator color="#22D46E" />
+                      <ActivityIndicator color={theme.green} />
                       <Text style={styles.bwPhotoText}>Reading scale…</Text>
                     </View>
                   ) : (
                     <View style={styles.busyRow}>
-                      <CameraIcon size={16} color="#22D46E" />
+                      <CameraIcon size={16} color={theme.green} />
                       <Text style={styles.bwPhotoText}>Snap the scale instead</Text>
                     </View>
                   )}
-                </TouchableOpacity>
+                </MotionPressable>
               </>
             )}
           </View>
@@ -232,7 +235,7 @@ export default function CompleteScreen() {
       </ScrollView>
 
       <View style={styles.ctaContainer}>
-        <TouchableOpacity
+        <MotionPressable
           style={[styles.doneBtn, capturing && styles.btnBusy]}
           onPress={capturePage}
           disabled={capturing}
@@ -251,88 +254,89 @@ export default function CompleteScreen() {
               <Text style={styles.doneBtnText}>Log tracker page</Text>
             </View>
           )}
-        </TouchableOpacity>
-        <TouchableOpacity
+        </MotionPressable>
+        <MotionPressable
           style={styles.secondaryBtn}
           onPress={() => router.replace('/')}
           activeOpacity={0.7}
           disabled={capturing}
         >
           <Text style={styles.secondaryText}>Skip — back to home</Text>
-        </TouchableOpacity>
+        </MotionPressable>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#0A0A0A' },
+  screen: { flex: 1, backgroundColor: theme.background },
 
-  hero: { paddingTop: 64, paddingHorizontal: 24, alignItems: 'center' },
+  hero: { paddingTop: 36, paddingHorizontal: 24, alignItems: 'center' },
+  savedLabel: { color: theme.muted, fontSize: 10, letterSpacing: 2.5, fontWeight: '700', marginBottom: 18 },
   heroCompact: { paddingTop: 20 },
   checkCircle: {
-    width: 80, height: 80, borderRadius: 40, backgroundColor: '#22D46E',
+    width: 80, height: 80, borderRadius: 28, backgroundColor: theme.green,
     alignItems: 'center', justifyContent: 'center',
   },
   checkCircleCompact: { width: 56, height: 56, borderRadius: 28 },
-  title: { fontSize: 26, fontWeight: '900', color: '#F0F0F0', letterSpacing: -0.5, textAlign: 'center', marginTop: 24 },
+  title: { fontSize: 25, fontWeight: '900', color: theme.text, letterSpacing: -0.5, textAlign: 'center', marginTop: 24 },
   titleCompact: { fontSize: 20, marginTop: 12 },
-  duration: { fontSize: 56, fontWeight: '900', color: '#22D46E', textAlign: 'center', marginTop: 8, lineHeight: 64 },
+  duration: { fontSize: 56, fontWeight: '900', color: theme.green, textAlign: 'center', marginTop: 8, lineHeight: 64 },
   durationCompact: { fontSize: 40, lineHeight: 46 },
-  durationLabel: { fontSize: 13, color: '#888', textAlign: 'center', marginTop: 6 },
+  durationLabel: { fontSize: 13, color: theme.muted, textAlign: 'center', marginTop: 6 },
 
   statsCard: {
-    marginHorizontal: 24, marginTop: 32,
-    backgroundColor: '#111', borderWidth: 1, borderColor: '#2A2A2A', borderRadius: 12,
+    marginHorizontal: 20, marginTop: 32,
+    backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 18,
     padding: 20, flexDirection: 'row', justifyContent: 'space-between',
   },
-  statLabel: { fontSize: 10, fontWeight: '600', color: '#888', textTransform: 'uppercase', letterSpacing: 1 },
-  statValue: { fontSize: 28, fontWeight: '800', color: '#F0F0F0', marginTop: 4 },
+  statLabel: { fontSize: 10, fontWeight: '600', color: theme.muted, textTransform: 'uppercase', letterSpacing: 1 },
+  statValue: { fontSize: 28, fontWeight: '800', color: theme.text, marginTop: 4 },
 
-  breakdown: { marginHorizontal: 24, marginTop: 16 },
-  breakdownTitle: { fontSize: 11, fontWeight: '600', color: '#888', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 },
+  breakdown: { marginHorizontal: 20, marginTop: 16 },
+  breakdownTitle: { fontSize: 11, fontWeight: '600', color: theme.muted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 },
   breakdownRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#2A2A2A',
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border,
   },
-  breakdownName: { fontSize: 14, fontWeight: '500', color: '#F0F0F0' },
-  breakdownSets: { fontSize: 13, color: '#888' },
+  breakdownName: { fontSize: 14, fontWeight: '500', color: theme.text },
+  breakdownSets: { fontSize: 13, color: theme.muted },
 
   bwCard: {
-    marginHorizontal: 24, marginTop: 24,
-    backgroundColor: '#111', borderWidth: 1, borderColor: '#2A2A2A', borderRadius: 12, padding: 16,
+    marginHorizontal: 20, marginTop: 24,
+    backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 18, padding: 16,
   },
-  bwTitle: { fontSize: 11, fontWeight: '600', color: '#888', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 },
+  bwTitle: { fontSize: 11, fontWeight: '600', color: theme.muted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 },
   bwRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   bwInput: {
     flex: 1, height: 44, borderRadius: 8, paddingHorizontal: 12,
-    backgroundColor: '#1C1C1C', borderWidth: 1, borderColor: '#2A2A2A',
-    color: '#F0F0F0', fontSize: 16, fontVariant: ['tabular-nums'],
+    backgroundColor: theme.raised, borderWidth: 1, borderColor: theme.border,
+    color: theme.text, fontSize: 16, fontVariant: ['tabular-nums'],
   },
-  bwUnit: { fontSize: 15, color: '#888', fontWeight: '600' },
-  bwAddBtn: { height: 44, paddingHorizontal: 18, borderRadius: 8, backgroundColor: '#22D46E', alignItems: 'center', justifyContent: 'center' },
+  bwUnit: { fontSize: 15, color: theme.muted, fontWeight: '600' },
+  bwAddBtn: { height: 44, paddingHorizontal: 18, borderRadius: 8, backgroundColor: theme.green, alignItems: 'center', justifyContent: 'center' },
   bwAddText: { color: '#000', fontWeight: '800', fontSize: 14 },
   bwPhotoBtn: {
     marginTop: 10, height: 44, borderRadius: 8,
     borderWidth: 1.5, borderColor: 'rgba(34,212,110,0.4)',
     alignItems: 'center', justifyContent: 'center',
   },
-  bwPhotoText: { color: '#22D46E', fontWeight: '700', fontSize: 14 },
+  bwPhotoText: { color: theme.green, fontWeight: '700', fontSize: 14 },
   bwSavedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  bwSaved: { flex: 1, fontSize: 14, color: '#22D46E', fontWeight: '600' },
-  exportHint: { fontSize: 13, color: '#888', lineHeight: 19, marginBottom: 12 },
+  bwSaved: { flex: 1, fontSize: 14, color: theme.green, fontWeight: '600' },
+  exportHint: { fontSize: 13, color: theme.muted, lineHeight: 19, marginBottom: 12 },
   exportWeekBtn: {
     height: 44, borderRadius: 8, borderWidth: 1.5, borderColor: 'rgba(34,212,110,0.4)',
     alignItems: 'center', justifyContent: 'center',
   },
-  exportWeekText: { color: '#22D46E', fontWeight: '700', fontSize: 14 },
+  exportWeekText: { color: theme.green, fontWeight: '700', fontSize: 14 },
 
   ctaContainer: {
     position: 'absolute', left: 0, right: 0, bottom: 0,
-    padding: 16, paddingBottom: 32, gap: 10,
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20, gap: 8, backgroundColor: theme.background, borderTopWidth: 1, borderTopColor: theme.border,
   },
   doneBtn: {
-    height: 64, borderRadius: 16, backgroundColor: '#22D46E',
+    height: 64, borderRadius: 16, backgroundColor: theme.green,
     alignItems: 'center', justifyContent: 'center',
   },
   doneBtnText: { color: '#000', fontSize: 17, fontWeight: '800' },
@@ -340,5 +344,5 @@ const styles = StyleSheet.create({
   busyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   secondaryBtn: { height: 48, alignItems: 'center', justifyContent: 'center' },
 
-  secondaryText: { color: '#888', fontSize: 15, fontWeight: '600' },
+  secondaryText: { color: theme.muted, fontSize: 15, fontWeight: '600' },
 });

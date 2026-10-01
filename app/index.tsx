@@ -1,3 +1,4 @@
+import { theme } from '../src/theme';
 import { router } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import React, { useEffect } from 'react';
@@ -6,7 +7,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -16,9 +16,11 @@ import {
   ClipboardIcon,
   ClockIcon,
   GearIcon,
-  MoonIcon,
   PlayIcon,
 } from '../src/components/icons';
+import { ArtworkHero } from '../src/components/ArtworkHero';
+import { EntranceView, MotionPressable } from '../src/components/Motion';
+import { ExerciseScene } from '../src/components/ExerciseScene';
 import { useHistoryStore } from '../src/store/historyStore';
 import { flushWorkout, useWorkoutStore } from '../src/store/workoutStore';
 import { getTodayWorkout, getNextWorkout, WORKOUTS } from '../src/data/workouts';
@@ -54,20 +56,22 @@ function HeaderIconButton({
   children: React.ReactNode;
 }) {
   return (
-    <TouchableOpacity
+    <MotionPressable
       style={styles.iconBtn}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
     >
       {children}
-    </TouchableOpacity>
+    </MotionPressable>
   );
 }
 
-function ExerciseRow({ ex, onPress }: { ex: Exercise; onPress: () => void }) {
+function ExerciseRow({ ex, index, onPress }: { ex: Exercise; index: number; onPress: () => void }) {
   return (
-    <TouchableOpacity style={styles.exerciseRow} onPress={onPress} activeOpacity={0.6}>
+    <EntranceView delay={Math.min(index * 35, 140)}>
+    <MotionPressable style={styles.exerciseRow} onPress={onPress} activeOpacity={0.8}
+      accessibilityRole="button" accessibilityLabel={`Start from ${ex.name}, ${ex.sets} sets, ${ex.reps} reps`}>
       {ex.type === 'TIER1' && (
         <View style={styles.t1Badge}>
           <Text style={styles.t1Text}>T1</Text>
@@ -79,14 +83,15 @@ function ExerciseRow({ ex, onPress }: { ex: Exercise; onPress: () => void }) {
         </View>
       )}
       {ex.type !== 'TIER1' && ex.type !== 'AMRAP' && (
-        <View style={styles.stdDot} />
+        <View style={styles.numberBadge}><Text style={styles.numberText}>{String(index + 1).padStart(2, '0')}</Text></View>
       )}
       <View style={styles.exerciseInfo}>
         <Text style={styles.exerciseName}>{ex.name}</Text>
         <Text style={styles.exerciseReps}>{ex.sets} × {ex.reps}</Text>
       </View>
-      <ChevronRightIcon size={16} color="#3A3A3A" />
-    </TouchableOpacity>
+      <ChevronRightIcon size={17} color="#83968B" />
+    </MotionPressable>
+    </EntranceView>
   );
 }
 
@@ -164,16 +169,17 @@ export default function HomeScreen() {
   function Header() {
     return (
       <View style={styles.header}>
-        <Text style={styles.appTitle}>WORKOUT TIMER</Text>
+        <View><Text style={styles.appTitle}>WORKOUT<Text style={styles.brandDot}> /</Text></Text>
+          <Text style={styles.appSubtitle}>TRAIN. RECOVER. REPEAT.</Text></View>
         <View style={styles.headerIcons}>
           <HeaderIconButton label="Tracker" onPress={() => router.push('/tracker')}>
-            <ClipboardIcon size={21} color="#888" />
+            <ClipboardIcon size={21} color={theme.muted} />
           </HeaderIconButton>
           <HeaderIconButton label="History" onPress={() => router.push('/history')}>
-            <ClockIcon size={21} color="#888" />
+            <ClockIcon size={21} color={theme.muted} />
           </HeaderIconButton>
           <HeaderIconButton label="Settings" onPress={() => router.push('/settings')}>
-            <GearIcon size={21} color="#888" />
+            <GearIcon size={21} color={theme.muted} />
           </HeaderIconButton>
         </View>
       </View>
@@ -183,14 +189,14 @@ export default function HomeScreen() {
   function ResumeBanner() {
     if (!hasActive) return null;
     return (
-      <TouchableOpacity style={styles.resumeBanner} onPress={() => router.push('/workout')} activeOpacity={0.85}>
+      <MotionPressable style={styles.resumeBanner} onPress={() => router.push('/workout')} activeOpacity={0.85}>
         <View style={styles.resumeDot} />
         <Text style={styles.resumeText}>Workout in progress — {activeWorkout?.name}</Text>
         <View style={styles.resumeAction}>
           <Text style={styles.resumeActionText}>RESUME</Text>
-          <ChevronRightIcon size={13} color="#22D46E" strokeWidth={3} />
+          <ChevronRightIcon size={13} color={theme.green} strokeWidth={3} />
         </View>
-      </TouchableOpacity>
+      </MotionPressable>
     );
   }
 
@@ -206,7 +212,7 @@ export default function HomeScreen() {
         <Text style={styles.pickerLabel}>{label}</Text>
         <View style={styles.pickerRow}>
           {days.map((d) => (
-            <TouchableOpacity
+            <MotionPressable
               key={d.key}
               style={[styles.pickerChip, today?.day === d.key && styles.pickerChipActive]}
               onPress={() => handleStartWorkout(WORKOUTS[d.key])}
@@ -215,7 +221,7 @@ export default function HomeScreen() {
               accessibilityLabel={`Start ${d.key} workout`}
             >
               <Text style={styles.pickerChipText}>{d.tag}</Text>
-            </TouchableOpacity>
+            </MotionPressable>
           ))}
         </View>
       </View>
@@ -229,9 +235,12 @@ export default function HomeScreen() {
         <ResumeBanner />
 
         <ScrollView contentContainerStyle={styles.restScroll}>
+          <ArtworkHero kind="recovery" label="RECOVERY DAY" title="Rest. Recharge." subtitle="Your next session starts with today's recovery." compact={isCompact} />
           <View style={styles.restDayCenter}>
-            <MoonIcon size={56} color="#555" strokeWidth={1.5} />
-            <Text style={styles.restTitle}>REST DAY</Text>
+            <View style={{ width: '100%', alignItems: 'center', marginBottom: 24 }}>
+              <ExerciseScene phase="break" />
+            </View>
+            <Text style={styles.restTitle}>Make room to recover.</Text>
             <Text style={styles.restSubtitle}>No 4AM alarm. Sleep in. Your muscles grow during rest.</Text>
             <View style={styles.divider} />
             <Text style={styles.nextLabel}>Next Up</Text>
@@ -259,10 +268,7 @@ export default function HomeScreen() {
       <ResumeBanner />
 
       <ScrollView contentContainerStyle={{ paddingBottom: isCompact ? 100 : 200 }}>
-        <View style={styles.dayBlock}>
-          <Text style={[styles.dayName, isCompact && styles.dayNameCompact]}>{today.name}</Text>
-          <Text style={styles.muscleGroups}>{today.muscleGroups}</Text>
-        </View>
+        <ArtworkHero label="TODAY'S TRAINING" title={today.name} subtitle={today.muscleGroups} compact={isCompact} />
 
         <View style={styles.statsCard}>
           <View>
@@ -279,7 +285,7 @@ export default function HomeScreen() {
         <Text style={styles.tapHint}>Tap an exercise to start from there</Text>
 
         {today.exercises.map((ex, i) => (
-          <ExerciseRow key={ex.id} ex={ex} onPress={() => handleStartWorkout(today, i)} />
+          <ExerciseRow key={ex.id} ex={ex} index={i} onPress={() => handleStartWorkout(today, i)} />
         ))}
 
         {isCompact && <DayPicker label="Switch workout" />}
@@ -287,7 +293,7 @@ export default function HomeScreen() {
 
       <View style={styles.ctaContainer}>
         {!isCompact && <DayPicker label="Switch workout" />}
-        <TouchableOpacity
+        <MotionPressable
           style={[styles.startBtn, isCompact && styles.startBtnCompact]}
           onPress={startAction}
           activeOpacity={0.85}
@@ -298,41 +304,43 @@ export default function HomeScreen() {
             <PlayIcon size={16} color="#000" />
             <Text style={styles.startBtnText}>{startLabel}</Text>
           </View>
-        </TouchableOpacity>
+        </MotionPressable>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#0A0A0A' },
+  screen: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4,
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 6,
   },
-  appTitle: { fontSize: 12, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase', color: '#888' },
+  appTitle: { fontSize: 18, fontWeight: '900', letterSpacing: 1, color: theme.text },
+  brandDot: { color: theme.green },
+  appSubtitle: { fontSize: 8, letterSpacing: 1.4, color: theme.muted, marginTop: 4 },
   headerIcons: { flexDirection: 'row', gap: 8 },
-  iconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  iconBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' },
 
   dayBlock: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16 },
-  dayName: { fontSize: 40, fontWeight: '900', color: '#22D46E', letterSpacing: -1 },
+  dayName: { fontSize: 40, fontWeight: '900', color: theme.green, letterSpacing: -1 },
   dayNameCompact: { fontSize: 28 },
-  muscleGroups: { fontSize: 15, color: '#888', marginTop: 4 },
+  muscleGroups: { fontSize: 15, color: theme.muted, marginTop: 4 },
 
   statsCard: {
-    marginHorizontal: 24, marginBottom: 24,
-    backgroundColor: '#111', borderWidth: 1, borderColor: '#2A2A2A', borderRadius: 12,
-    padding: 16, flexDirection: 'row', justifyContent: 'space-between',
+    marginHorizontal: 20, marginBottom: 22,
+    backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 18,
+    padding: 18, flexDirection: 'row', justifyContent: 'space-between',
   },
-  statLabel: { fontSize: 10, fontWeight: '600', color: '#888', textTransform: 'uppercase', letterSpacing: 1 },
-  statValue: { fontSize: 28, fontWeight: '800', color: '#F0F0F0', marginTop: 4 },
+  statLabel: { fontSize: 10, fontWeight: '600', color: theme.muted, textTransform: 'uppercase', letterSpacing: 1 },
+  statValue: { fontSize: 25, fontWeight: '800', color: theme.text, marginTop: 6 },
 
   sectionLabel: {
-    fontSize: 11, fontWeight: '600', color: '#888', textTransform: 'uppercase',
-    letterSpacing: 1.5, paddingHorizontal: 24, marginBottom: 4,
+    fontSize: 11, fontWeight: '600', color: theme.muted, textTransform: 'uppercase',
+    letterSpacing: 1.5, paddingHorizontal: 22, marginBottom: 5,
   },
   tapHint: {
-    fontSize: 12, color: '#555', paddingHorizontal: 24, marginBottom: 8,
+    fontSize: 12, color: theme.subtle, paddingHorizontal: 22, marginBottom: 14,
   },
   resumeBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -340,56 +348,57 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(34,212,110,0.10)', borderWidth: 1, borderColor: 'rgba(34,212,110,0.35)',
     borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12,
   },
-  resumeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#22D46E' },
-  resumeText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#F0F0F0' },
+  resumeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.green },
+  resumeText: { flex: 1, fontSize: 13, fontWeight: '600', color: theme.text },
   resumeAction: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  resumeActionText: { fontSize: 12, fontWeight: '800', color: '#22D46E', letterSpacing: 0.5 },
+  resumeActionText: { fontSize: 12, fontWeight: '800', color: theme.green, letterSpacing: 0.5 },
   exerciseRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 24, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#1A1A1A',
+    marginHorizontal: 20, marginBottom: 8, paddingHorizontal: 14, paddingVertical: 14,
+    backgroundColor: theme.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.border,
   },
-  t1Badge: { backgroundColor: 'rgba(245,158,11,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
-  t1Text: { color: '#F59E0B', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  amrapBadge: { backgroundColor: 'rgba(59,130,246,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
-  amrapText: { color: '#3B82F6', fontSize: 10, fontWeight: '800' },
-  stdDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#262626', marginHorizontal: 6 },
+  t1Badge: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(245,158,11,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  t1Text: { color: theme.amber, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  amrapBadge: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(59,130,246,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  amrapText: { color: theme.blue, fontSize: 10, fontWeight: '800' },
+  numberBadge: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.raised },
+  numberText: { color: theme.muted, fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
   exerciseInfo: { flex: 1 },
-  exerciseName: { fontSize: 15, fontWeight: '500', color: '#F0F0F0' },
-  exerciseReps: { fontSize: 12, color: '#888', marginTop: 2 },
+  exerciseName: { fontSize: 14, fontWeight: '700', color: theme.text },
+  exerciseReps: { fontSize: 12, color: theme.muted, marginTop: 2 },
 
   ctaContainer: {
     position: 'absolute', left: 0, right: 0, bottom: 0,
-    padding: 16, paddingBottom: 32,
-    backgroundColor: 'transparent',
+    paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20,
+    backgroundColor: theme.background, borderTopWidth: 1, borderTopColor: theme.border,
   },
   startBtn: {
-    height: 64, borderRadius: 16, backgroundColor: '#22D46E',
+    height: 60, borderRadius: 18, backgroundColor: theme.green,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#22D46E', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+    shadowColor: theme.green, shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
     elevation: 8,
   },
   startBtnCompact: { height: 52 },
   startBtnRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   startBtnText: { color: '#000', fontSize: 17, fontWeight: '800', letterSpacing: 0.5 },
 
-  restScroll: { flexGrow: 1, justifyContent: 'center' },
+  restScroll: { flexGrow: 1, paddingBottom: 24 },
   restDayCenter: {
-    alignItems: 'center', paddingHorizontal: 24, paddingVertical: 32,
+    alignItems: 'center', paddingHorizontal: 24, paddingVertical: 22,
   },
-  pickerWrap: { alignItems: 'center', marginTop: 16 },
-  pickerLabel: { fontSize: 10, fontWeight: '600', color: '#666', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 },
-  pickerRow: { flexDirection: 'row', gap: 8 },
+  pickerWrap: { alignItems: 'center', marginTop: 10, marginBottom: 12 },
+  pickerLabel: { fontSize: 10, fontWeight: '600', color: theme.subtle, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 },
+  pickerRow: { flexDirection: 'row', gap: 8, width: '100%' },
   pickerChip: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
-    backgroundColor: '#1C1C1C', borderWidth: 1, borderColor: '#2A2A2A',
+    flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 10, borderRadius: 12,
+    backgroundColor: theme.raised, borderWidth: 1, borderColor: theme.border,
   },
-  pickerChipActive: { borderColor: '#22D46E' },
-  pickerChipText: { color: '#F0F0F0', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
+  pickerChipActive: { borderColor: theme.green, backgroundColor: 'rgba(34,212,110,0.10)' },
+  pickerChipText: { color: theme.text, fontSize: 12, fontWeight: '700', letterSpacing: 1 },
 
-  restTitle: { fontSize: 36, fontWeight: '900', color: '#888', letterSpacing: -1, marginTop: 24 },
-  restSubtitle: { fontSize: 15, color: '#888', textAlign: 'center', marginTop: 8, lineHeight: 22, maxWidth: 260 },
-  divider: { width: 80, height: 1, backgroundColor: '#1C1C1C', marginVertical: 32 },
-  nextLabel: { fontSize: 11, fontWeight: '600', color: '#888', textTransform: 'uppercase', letterSpacing: 1.5 },
-  nextWorkout: { fontSize: 16, fontWeight: '600', color: '#F0F0F0', marginTop: 6, textAlign: 'center' },
+  restTitle: { fontSize: 22, fontWeight: '800', color: theme.text, letterSpacing: -0.5 },
+  restSubtitle: { fontSize: 15, color: theme.muted, textAlign: 'center', marginTop: 8, lineHeight: 22, maxWidth: 260 },
+  divider: { width: 80, height: 1, backgroundColor: theme.raised, marginVertical: 32 },
+  nextLabel: { fontSize: 11, fontWeight: '600', color: theme.muted, textTransform: 'uppercase', letterSpacing: 1.5 },
+  nextWorkout: { fontSize: 16, fontWeight: '600', color: theme.text, marginTop: 6, textAlign: 'center' },
 });

@@ -32,12 +32,18 @@ assert 'application-debuggable' not in manifest, 'Distributed update must run in
 with zipfile.ZipFile(a.apk) as archive:
     names = archive.namelist()
     assert archive.getinfo('assets/index.android.bundle').file_size > 100_000
+    # AAPT may shorten resource file paths during optimizeReleaseResources.
+    # Verify payload hashes instead of assuming the unoptimized Metro names.
+    payloads = {}
+    for name in names:
+        if name.startswith('res/') and not name.endswith('/'):
+            data = archive.read(name)
+            payloads.setdefault(hashlib.sha256(data).digest(), []).append(name)
+    resources = run(build_tools / 'aapt', 'dump', 'resources', a.apk)
     for asset in ['training-focus', 'session-complete', 'history-progress', 'tracker-journal', 'backup-vault', 'recovery']:
-        # Metro strips punctuation from Android resource names.
-        matches = [n for n in names if n.startswith('res/') and asset.replace('-', '') in n]
-        assert len(matches) == 1, (asset, matches)
-        actual = archive.read(matches[0])
         expected = (Path('assets/artwork') / (asset + '.jpg')).read_bytes()
-        assert actual == expected, f'{asset}: packaged artwork differs from source'
-        print(f'Embedded artwork verified: {asset} ({len(actual)} bytes)')
+        matches = payloads.get(hashlib.sha256(expected).digest(), [])
+        assert matches, f'{asset}: original artwork bytes absent from APK'
+        assert asset.replace('-', '') in resources, f'{asset}: Android resource identifier missing'
+        print(f'Embedded artwork verified: {asset} ({len(expected)} bytes, {matches})')
 print('APK signature, package, version, release mode, JS, and six local pictures verified.')

@@ -37,7 +37,7 @@ jobs:
           \ from run ${baseline.workflow_run.id}`);\n} else {\n  core.warning('No previous compatible APK is available; only\
           \ fresh install will be checked.');\n}\n"
     - name: Prepare emulator checks
-      run: 'python3 -m pip install Pillow
+      run: 'python3 -m pip install Pillow "uiautomator2>=3,<4"
 
         if [ -f baseline.zip ]; then unzip baseline.zip -d apk/baseline; fi
 

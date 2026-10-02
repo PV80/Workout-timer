@@ -12,6 +12,7 @@ import subprocess
 import time
 import xml.etree.ElementTree as ET
 from PIL import Image
+import uiautomator2 as u2
 
 PACKAGE = 'com.briangitau.workouttimer'
 OUT = Path('native-evidence')
@@ -37,15 +38,12 @@ def launch():
     time.sleep(5)
 
 def tree():
-    # Reduced motion keeps uiautomator's idle detector from waiting on the rigs.
-    for _ in range(3):
-        result = adb('shell', 'uiautomator', 'dump', '/sdcard/window.xml', check=False)
-        if 'dumped' in result:
-            raw = adb('shell', 'cat', '/sdcard/window.xml')
-            (OUT / 'latest-ui.xml').write_text(raw)
-            return ET.fromstring(raw)
-        time.sleep(1)
-    raise AssertionError('Could not inspect the native UI')
+    # Live timers continuously emit accessibility updates. Disable UiAutomator's
+    # idle wait instead of assuming a workout screen becomes idle for a second.
+    raw=device.dump_hierarchy(compressed=False)
+    (OUT / 'latest-ui.xml').write_text(raw)
+    return ET.fromstring(raw)
+
 
 def bounds(node):
     return tuple(map(int, re.findall(r'\d+', node.attrib['bounds'])))
@@ -119,6 +117,14 @@ def check_artwork(name):
     assert error < 18 and error < blank_error*.6, f'{kind}: picture pixels differ from cover crop (mean error {error:.2f}, blank {blank_error:.2f})'
     print(f'Offline native artwork verified: {kind}; mean RGB error {error:.2f}', flush=True)
 
+def assert_scene_above_buttons(label):
+    root=tree()
+    scene=next((n for n in root.iter('node') if n.get('resource-id', '').endswith('exercise-animation')), None)
+    button=find(label)
+    assert scene is not None and button is not None
+    assert bounds(scene)[3] <= bounds(button)[1], 'Animation overlaps the workout action button'
+    print('Native animation card fits above the workout button.', flush=True)
+
 def read_storage(label):
     adb('shell', 'am', 'force-stop', PACKAGE)
     folder=OUT / label
@@ -134,6 +140,8 @@ def read_storage(label):
 try:
     adb('root')
     adb('wait-for-device')
+    device=u2.connect()
+    device.jsonrpc.setConfigurator({'waitForIdleTimeout': 0, 'waitForSelectorTimeout': 0})
     adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', '0')
     adb('shell', 'settings', 'put', 'global', 'transition_animation_scale', '0')
     adb('shell', 'settings', 'put', 'global', 'window_animation_scale', '0')
@@ -158,6 +166,7 @@ try:
         assert before == after, 'Updating the APK changed saved workout/history data'
         launch()
         assert find('PAUSED') is not None, 'Paused workout did not resume after upgrade'
+        capture('upgraded-paused-workout')
         restored=read_storage('after-relaunch')
         checkpoint=json.loads(restored['active_workout'])['state']
         for field in ['sessionId', 'setRecords', 'currentSetNumber', 'pausedAt', 'phaseStartedAt']:

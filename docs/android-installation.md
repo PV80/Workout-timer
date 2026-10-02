@@ -34,7 +34,9 @@ hero JPEGs. The compatible build must match the existing debug keystore.
 The `native-smoke` CI job uses a disposable Android 35 emulator. When a prior
 compatible main-branch artifact is available, it installs that APK, completes a
 set, pauses the second set, and upgrades in place. It compares saved storage
-before/after installation and verifies the checkpoint after a cold launch.
+before/after installation and verifies the checkpoint after a cold launch. It
+checks that completing another set preserves earlier records and that the
+animation stays fully above the paused and rest-mode action buttons.
 It checks fresh-screen artwork pixels against the expected cover crop while
 Wi-Fi and mobile data are disabled. On main, it also tests a clean installation
 of the production-signed release. Screenshots and logs are uploaded as

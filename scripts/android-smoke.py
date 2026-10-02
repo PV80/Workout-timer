@@ -12,6 +12,7 @@ import subprocess
 import time
 import xml.etree.ElementTree as ET
 from PIL import Image
+import uiautomator2 as u2
 
 PACKAGE = 'com.briangitau.workouttimer'
 OUT = Path('native-evidence')
@@ -37,21 +38,18 @@ def launch():
     time.sleep(5)
 
 def tree():
-    # Reduced motion keeps uiautomator's idle detector from waiting on the rigs.
-    for _ in range(3):
-        result = adb('shell', 'uiautomator', 'dump', '/sdcard/window.xml', check=False)
-        if 'dumped' in result:
-            raw = adb('shell', 'cat', '/sdcard/window.xml')
-            (OUT / 'latest-ui.xml').write_text(raw)
-            return ET.fromstring(raw)
-        time.sleep(1)
-    raise AssertionError('Could not inspect the native UI')
+    # Live timers continuously emit accessibility updates. Disable UiAutomator's
+    # idle wait instead of assuming a workout screen becomes idle for a second.
+    raw=device.dump_hierarchy(compressed=False)
+    (OUT / 'latest-ui.xml').write_text(raw)
+    return ET.fromstring(raw)
+
 
 def bounds(node):
     return tuple(map(int, re.findall(r'\d+', node.attrib['bounds'])))
 
-def find(label):
-    for node in tree().iter('node'):
+def find(label, root=None):
+    for node in (root if root is not None else tree()).iter('node'):
         if label.casefold() in [(node.get('text') or '').casefold(), (node.get('content-desc') or '').casefold()]:
             x1,y1,x2,y2 = bounds(node)
             if x2 > x1 and y2 > y1:
@@ -59,18 +57,28 @@ def find(label):
     return None
 
 def tap(label, scroll=False):
-    for _ in range(8 if scroll else 3):
-        node = find(label)
+    for _ in range(12):
+        root=tree()
+        node = find(label, root)
         if node is not None:
             x1, y1, x2, y2 = bounds(node)
             adb('shell', 'input', 'tap', (x1+x2)//2, (y1+y2)//2)
             time.sleep(2)
             return
+        # Exact-alarm permission is checked asynchronously after navigation.
+        # Dismiss the known optional prompt even if it appears after our first poll.
+        dialog=find('Not now', root)
+        if dialog is not None:
+            x1,y1,x2,y2=bounds(dialog)
+            adb('shell','input','tap',(x1+x2)//2,(y1+y2)//2)
+            time.sleep(1)
+            continue
         if scroll:
             adb('shell', 'input', 'swipe', 500, 1450, 500, 600, 400)
         else:
             time.sleep(1)
-    raise AssertionError(f'Native control not found: {label}')
+    visible=[n.get('text') or n.get('content-desc') for n in root.iter('node') if n.get('text') or n.get('content-desc')]
+    raise AssertionError(f'Native control not found: {label}; visible: {visible}')
 
 def capture(name):
     path = OUT / (name + '.png')
@@ -84,7 +92,10 @@ def check_artwork(name):
     kind = card.get('resource-id').split('artwork-')[-1]
     asset = {'training': 'training-focus', 'recovery': 'recovery', 'history': 'history-progress',
              'tracker': 'tracker-journal', 'backup': 'backup-vault', 'complete': 'session-complete'}[kind]
-    x1,y1,x2,y2 = bounds(card)
+    image_node=next((n for n in card.iter('node') if n.get('class') == 'android.widget.ImageView'), None)
+    assert image_node is not None, 'Native picture view is missing'
+    # Use the actual image bounds: the card includes a density-scaled border.
+    x1,y1,x2,y2 = bounds(image_node)
     actual = Image.open(capture(name)).convert('RGB')
     source = Image.open(Path('assets/artwork') / (asset + '.jpg')).convert('RGB')
     w,h = x2-x1,y2-y1
@@ -124,7 +135,10 @@ def assert_scene_above_buttons(label):
     scene=next((n for n in root.iter('node') if n.get('resource-id', '').endswith('exercise-animation')), None)
     button=find(label)
     assert scene is not None and button is not None
-    assert bounds(scene)[3] <= bounds(button)[1], 'Animation overlaps the workout action button'
+    rect=bounds(scene)
+    density=int(re.findall(r'\d+', adb('shell', 'wm', 'density'))[-1]) / 160
+    assert rect[3]-rect[1] >= 108*density-2, 'Animation card is clipped'
+    assert rect[3] <= bounds(button)[1], 'Animation overlaps the workout action button'
     print('Native animation card fits above the workout button.', flush=True)
 
 def read_storage(label):
@@ -142,6 +156,8 @@ def read_storage(label):
 try:
     adb('root')
     adb('wait-for-device')
+    device=u2.connect()
+    device.jsonrpc.setConfigurator({'waitForIdleTimeout': 0, 'waitForSelectorTimeout': 0})
     adb('shell', 'settings', 'put', 'global', 'animator_duration_scale', '0')
     adb('shell', 'settings', 'put', 'global', 'transition_animation_scale', '0')
     adb('shell', 'settings', 'put', 'global', 'window_animation_scale', '0')
@@ -173,6 +189,14 @@ try:
         for field in ['sessionId', 'setRecords', 'currentSetNumber', 'pausedAt', 'phaseStartedAt']:
             assert prior[field] == checkpoint[field], f'Upgrade changed {field}'
         print('In-place upgrade and cold-start recovery preserved the earlier set and paused second set.', flush=True)
+        launch()
+        tap('RESUME WORKOUT')
+        tap('DONE')
+        assert_scene_above_buttons('START NEXT SET')
+        capture('upgraded-rest-workout')
+        rest=json.loads(read_storage('after-second-set')['active_workout'])['state']
+        assert len(rest['setRecords']) == 2 and rest['setRecords'][0] == prior['setRecords'][0]
+        print('Completing the next set after upgrade retained both set records.', flush=True)
         # Clear only the disposable emulator fixture for independent fresh-screen checks.
         adb('shell','pm','clear',PACKAGE)
     else:

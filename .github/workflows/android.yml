@@ -196,7 +196,7 @@ jobs:
             }
       - name: Prepare emulator checks
         run: |
-          python3 -m pip install Pillow
+          python3 -m pip install Pillow uiautomator2==3.7.0
           if [ -f baseline.zip ]; then unzip baseline.zip -d apk/baseline; fi
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules

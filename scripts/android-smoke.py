@@ -135,7 +135,10 @@ def assert_scene_above_buttons(label):
     scene=next((n for n in root.iter('node') if n.get('resource-id', '').endswith('exercise-animation')), None)
     button=find(label)
     assert scene is not None and button is not None
-    assert bounds(scene)[3] <= bounds(button)[1], 'Animation overlaps the workout action button'
+    rect=bounds(scene)
+    density=int(re.findall(r'\d+', adb('shell', 'wm', 'density'))[-1]) / 160
+    assert rect[3]-rect[1] >= 108*density-2, 'Animation card is clipped'
+    assert rect[3] <= bounds(button)[1], 'Animation overlaps the workout action button'
     print('Native animation card fits above the workout button.', flush=True)
 
 def read_storage(label):
@@ -180,11 +183,20 @@ try:
         launch()
         assert find('PAUSED') is not None, 'Paused workout did not resume after upgrade'
         capture('upgraded-paused-workout')
+        assert_scene_above_buttons('RESUME WORKOUT')
         restored=read_storage('after-relaunch')
         checkpoint=json.loads(restored['active_workout'])['state']
         for field in ['sessionId', 'setRecords', 'currentSetNumber', 'pausedAt', 'phaseStartedAt']:
             assert prior[field] == checkpoint[field], f'Upgrade changed {field}'
         print('In-place upgrade and cold-start recovery preserved the earlier set and paused second set.', flush=True)
+        launch()
+        tap('RESUME WORKOUT')
+        tap('DONE')
+        assert_scene_above_buttons('START NEXT SET')
+        capture('upgraded-rest-workout')
+        rest=json.loads(read_storage('after-second-set')['active_workout'])['state']
+        assert len(rest['setRecords']) == 2 and rest['setRecords'][0] == prior['setRecords'][0]
+        print('Completing the next set after upgrade retained both set records.', flush=True)
         # Clear only the disposable emulator fixture for independent fresh-screen checks.
         adb('shell','pm','clear',PACKAGE)
     else:

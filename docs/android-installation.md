@@ -5,6 +5,8 @@ prepends the bundled JPEG's intrinsic dimensions to an Image's styles. Absolute
 positioning alone left a 960×640 image clipped inside the card, often exposing
 only the dark corner. Explicit 100% width and height make cover scaling use the
 card's actual bounds. SVG shading now uses explicit percentage coordinates.
+The workout screen reserves space for the animation and allows its middle
+section to scroll when needed, keeping the action buttons clear on small phones.
 
 ## Choose an APK with the same signing certificate as the installed app
 

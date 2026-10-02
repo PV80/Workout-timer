@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import React, { useCallback } from 'react';
 import {
   Alert,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -99,7 +100,7 @@ export default function WorkoutScreen() {
   const isCompact = height < 520;
   const ringSize = isCompact
     ? Math.max(120, Math.min(210, height - 150, width * 0.45))
-    : Math.max(160, Math.min(300, width - 96, height - 430));
+    : Math.max(144, Math.min(300, width - 96, height - (height >= 700 ? 580 : 430)));
 
   const store = useWorkoutStore();
   const settings = useHistoryStore((s) => s.settings);
@@ -443,13 +444,15 @@ export default function WorkoutScreen() {
         </View>
       ) : (
         <>
+          <ScrollView style={styles.workoutBody} contentContainerStyle={styles.workoutBodyContent}>
           <View style={styles.timerContainer}>{ringBlock}</View>
-          <View style={styles.sceneSpace}>
+          <View style={[styles.sceneSpace, height >= 700 && styles.sceneSpaceWithArt]}>
             {height >= 700 && <ExerciseScene
               exerciseId={isTransition ? nextEx?.id : exercise.id}
               phase={currentPhase} paused={isPaused}
             />}
           </View>
+          </ScrollView>
           <View style={styles.ctaBlock}>{ctas}</View>
         </>
       )}
@@ -517,6 +520,11 @@ const styles = StyleSheet.create({
   setProgressBreak: { color: theme.blue },
   setProgressTransition: { color: theme.amber },
 
+  // Reserve the animation's real height; allow scrolling with large text or
+  // unusually long exercise names while keeping the action buttons fixed.
+  workoutBody: { flex: 1 },
+  workoutBodyContent: { flexGrow: 1 },
+  sceneSpaceWithArt: { minHeight: 116 },
   timerContainer: { alignItems: 'center', paddingTop: 18, paddingBottom: 8 },
   sceneSpace: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   ringBlock: { alignItems: 'center', gap: 10 },

@@ -48,8 +48,8 @@ def tree():
 def bounds(node):
     return tuple(map(int, re.findall(r'\d+', node.attrib['bounds'])))
 
-def find(label):
-    for node in tree().iter('node'):
+def find(label, root=None):
+    for node in (root if root is not None else tree()).iter('node'):
         if label.casefold() in [(node.get('text') or '').casefold(), (node.get('content-desc') or '').casefold()]:
             x1,y1,x2,y2 = bounds(node)
             if x2 > x1 and y2 > y1:
@@ -57,18 +57,28 @@ def find(label):
     return None
 
 def tap(label, scroll=False):
-    for _ in range(8 if scroll else 3):
-        node = find(label)
+    for _ in range(12):
+        root=tree()
+        node = find(label, root)
         if node is not None:
             x1, y1, x2, y2 = bounds(node)
             adb('shell', 'input', 'tap', (x1+x2)//2, (y1+y2)//2)
             time.sleep(2)
             return
+        # Exact-alarm permission is checked asynchronously after navigation.
+        # Dismiss the known optional prompt even if it appears after our first poll.
+        dialog=find('Not now', root)
+        if dialog is not None:
+            x1,y1,x2,y2=bounds(dialog)
+            adb('shell','input','tap',(x1+x2)//2,(y1+y2)//2)
+            time.sleep(1)
+            continue
         if scroll:
             adb('shell', 'input', 'swipe', 500, 1450, 500, 600, 400)
         else:
             time.sleep(1)
-    raise AssertionError(f'Native control not found: {label}')
+    visible=[n.get('text') or n.get('content-desc') for n in root.iter('node') if n.get('text') or n.get('content-desc')]
+    raise AssertionError(f'Native control not found: {label}; visible: {visible}')
 
 def capture(name):
     path = OUT / (name + '.png')

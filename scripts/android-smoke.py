@@ -82,7 +82,10 @@ def check_artwork(name):
     kind = card.get('resource-id').split('artwork-')[-1]
     asset = {'training': 'training-focus', 'recovery': 'recovery', 'history': 'history-progress',
              'tracker': 'tracker-journal', 'backup': 'backup-vault', 'complete': 'session-complete'}[kind]
-    x1,y1,x2,y2 = bounds(card)
+    image_node=next((n for n in card.iter('node') if n.get('class') == 'android.widget.ImageView'), None)
+    assert image_node is not None, 'Native picture view is missing'
+    # Use the actual image bounds: the card includes a density-scaled border.
+    x1,y1,x2,y2 = bounds(image_node)
     actual = Image.open(capture(name)).convert('RGB')
     source = Image.open(Path('assets/artwork') / (asset + '.jpg')).convert('RGB')
     w,h = x2-x1,y2-y1

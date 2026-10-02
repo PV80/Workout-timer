@@ -1,0 +1,66 @@
+name: Android candidate validation
+'on':
+  push:
+    branches:
+    - verify/android-native-1-1-1
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-smoke:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Ensure APK application sources exactly match the tested checkout
+      run: git diff --exit-code 2744e8f79b8740949170ebc742763d04954862f7 HEAD -- . ':(exclude)scripts/android-smoke.py' ':(exclude).github/workflows/android-native-replay.yml'
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '17'
+    - uses: actions/download-artifact@v4
+      with:
+        name: workout-timer-update-existing-debug
+        path: apk/update
+        run-id: 36947505159
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Find previous debug-compatible APK for upgrade regression
+      uses: actions/github-script@v7
+      with:
+        script: "const fs = require('fs');\nconst artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo,\
+          \ {\n  owner: context.repo.owner, repo: context.repo.repo, per_page: 100\n});\nconst baseline = artifacts.find(a\
+          \ => !a.expired &&\n  a.workflow_run?.head_branch === 'main' &&\n  a.workflow_run?.id !== context.runId &&\n  ['workout-timer-debug',\
+          \ 'workout-timer-update-existing-debug'].includes(a.name));\nif (baseline) {\n  const zip = await github.rest.actions.downloadArtifact({\n\
+          \    owner: context.repo.owner, repo: context.repo.repo,\n    artifact_id: baseline.id, archive_format: 'zip'\n\
+          \  });\n  fs.writeFileSync('baseline.zip', Buffer.from(zip.data));\n  core.info(`Upgrade baseline: ${baseline.name}\
+          \ from run ${baseline.workflow_run.id}`);\n} else {\n  core.warning('No previous compatible APK is available; only\
+          \ fresh install will be checked.');\n}\n"
+    - name: Prepare emulator checks
+      run: 'python3 -m pip install Pillow
+
+        if [ -f baseline.zip ]; then unzip baseline.zip -d apk/baseline; fi
+
+        echo ''KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"'' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+
+        sudo udevadm control --reload-rules
+
+        sudo udevadm trigger --name-match=kvm
+
+        '
+    - name: Test installation, upgrade, recovery, and offline pictures
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: 35
+        target: google_apis
+        arch: x86_64
+        profile: pixel_2
+        disable-animations: true
+        script: bash scripts/run-android-smoke.sh
+    - name: Upload native screenshots and diagnostics
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-native-evidence
+        path: native-evidence
+        if-no-files-found: warn

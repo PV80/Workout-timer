@@ -52,7 +52,7 @@ def bounds(node):
 
 def find(label):
     for node in tree().iter('node'):
-        if label in [node.get('text'), node.get('content-desc')]:
+        if label.casefold() in [(node.get('text') or '').casefold(), (node.get('content-desc') or '').casefold()]:
             x1,y1,x2,y2 = bounds(node)
             if x2 > x1 and y2 > y1:
                 return node
@@ -142,6 +142,7 @@ try:
     if a.baseline:
         install(a.baseline)
         launch()
+        capture('baseline-home')
         tap('Start monday workout', scroll=True)
         if find('Not now') is not None:
             tap('Not now')

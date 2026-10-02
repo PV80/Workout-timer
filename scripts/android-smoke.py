@@ -137,7 +137,13 @@ def assert_scene_above_buttons(label):
     assert scene is not None and button is not None
     rect=bounds(scene)
     density=int(re.findall(r'\d+', adb('shell', 'wm', 'density'))[-1]) / 160
-    assert rect[3]-rect[1] >= 108*density-2, 'Animation card is clipped'
+    svg=next((n for n in scene.iter('node') if n.get('class', '').endswith('SvgView')), None)
+    assert svg is not None, 'Animation drawing is missing'
+    drawing=bounds(svg)
+    width,height=drawing[2]-drawing[0],drawing[3]-drawing[1]
+    assert any(abs(width-w*density) <= 3 and abs(height-h*density) <= 3
+               for w,h in [(110,82),(138,104)]), 'Animation viewport is clipped'
+    assert rect[0] <= drawing[0] and rect[1] <= drawing[1] and rect[2] >= drawing[2] and rect[3] >= drawing[3], 'Animation extends outside its card'
     assert rect[3] <= bounds(button)[1], 'Animation overlaps the workout action button'
     print('Native animation card fits above the workout button.', flush=True)
 

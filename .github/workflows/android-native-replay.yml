@@ -73,4 +73,16 @@ jobs:
         name: android-native-evidence
         path: native-evidence
         if-no-files-found: warn
+    - name: Prepare the exact tested APK for download
+      run: 'mkdir -p verified
+
+        cp apk/update/app-release.apk verified/WorkoutTimer-1.1.1-update.apk
+
+        sha256sum verified/WorkoutTimer-1.1.1-update.apk'
+    - name: Publish tested update APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: WorkoutTimer-1.1.1-verified-update
+        path: verified/WorkoutTimer-1.1.1-update.apk
+        if-no-files-found: error
     timeout-minutes: 20

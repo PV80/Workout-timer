@@ -144,7 +144,7 @@ export function ExerciseScene({exerciseId,phase,paused=false}:{exerciseId?:strin
   if(!art)return null;
   const frame=equipmentFrame(art);
   const title=paused?'Take your time.':rest?'Breathe. Reset.':phase==='transition'?'Get set.':id==='plank'?'Stay steady.':'Move with control.';
-  return <View style={[styles.card,compact&&{minHeight:88}]} accessible={false}>
+  return <View testID="exercise-animation" collapsable={false} style={[styles.card,compact&&{minHeight:88}]} accessible={false}>
     <Svg width={compact?110:138} height={compact?82:104} viewBox="0 0 192 144" accessible={false}>
       <Ellipse cx={96} cy={136} rx={75} ry={5} fill="#07110D" opacity={.55}/>
       {art.floor&&<Path d={worldLine([[-22,0,-65],[22,0,-65],[22,0,54],[-22,0,54]],yaw,true)} fill="#243B32" stroke="#395648" strokeWidth={1}/>} 

@@ -52,7 +52,7 @@ def bounds(node):
 
 def find(label):
     for node in tree().iter('node'):
-        if label in [node.get('text'), node.get('content-desc')]:
+        if label.casefold() in [(node.get('text') or '').casefold(), (node.get('content-desc') or '').casefold()]:
             x1,y1,x2,y2 = bounds(node)
             if x2 > x1 and y2 > y1:
                 return node
@@ -119,6 +119,14 @@ def check_artwork(name):
     assert error < 18 and error < blank_error*.6, f'{kind}: picture pixels differ from cover crop (mean error {error:.2f}, blank {blank_error:.2f})'
     print(f'Offline native artwork verified: {kind}; mean RGB error {error:.2f}', flush=True)
 
+def assert_scene_above_buttons(label):
+    root=tree()
+    scene=next((n for n in root.iter('node') if n.get('resource-id', '').endswith('exercise-animation')), None)
+    button=find(label)
+    assert scene is not None and button is not None
+    assert bounds(scene)[3] <= bounds(button)[1], 'Animation overlaps the workout action button'
+    print('Native animation card fits above the workout button.', flush=True)
+
 def read_storage(label):
     adb('shell', 'am', 'force-stop', PACKAGE)
     folder=OUT / label
@@ -142,6 +150,7 @@ try:
     if a.baseline:
         install(a.baseline)
         launch()
+        capture('baseline-home')
         tap('Start monday workout', scroll=True)
         if find('Not now') is not None:
             tap('Not now')
@@ -157,6 +166,8 @@ try:
         assert before == after, 'Updating the APK changed saved workout/history data'
         launch()
         assert find('PAUSED') is not None, 'Paused workout did not resume after upgrade'
+        capture('upgraded-paused-workout')
+        assert_scene_above_buttons('RESUME WORKOUT')
         restored=read_storage('after-relaunch')
         checkpoint=json.loads(restored['active_workout'])['state']
         for field in ['sessionId', 'setRecords', 'currentSetNumber', 'pausedAt', 'phaseStartedAt']:

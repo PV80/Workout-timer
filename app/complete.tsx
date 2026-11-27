@@ -15,7 +15,7 @@ import { useTrackerStore, currentWeekKey } from '../src/store/trackerStore';
 import { exportCurrentWeek } from '../src/utils/exportWeek';
 import { formatHoursMinutes } from '../src/utils/time';
 import { runBodyweightCapture, runTrackerCapture } from '../src/utils/trackerCapture';
-import { handleBodyweightResult, handleCaptureResult, promptCaptureSource } from './tracker';
+import { handleBodyweightResult, handleCaptureResult, promptCaptureSource } from '../src/utils/capturePrompts';
 
 export default function CompleteScreen() {
   const { height } = useWindowDimensions();
@@ -60,7 +60,7 @@ export default function CompleteScreen() {
     promptCaptureSource(async (source) => {
       setCapturing(true);
       try {
-        const result = await runTrackerCapture(source);
+        const result = await runTrackerCapture(source, latest ?? undefined);
         const saved = handleCaptureResult(result);
         if (saved) {
           // Friday: land in review mode — check/amend the week's entries,

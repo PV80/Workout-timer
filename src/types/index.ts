@@ -88,7 +88,11 @@ export interface BodyweightEntry {
 export interface TrackerEntry {
   id: string;
   capturedAt: string;       // ISO
-  weekKey: string;          // ISO week the photo was taken, e.g. "2026-W27"
+  weekKey: string;          // ISO week of the workout, or capture week for a standalone page
+  sessionId?: string;
+  workoutDate?: string;     // local calendar date, even when the photo is added weeks later
+  photo?: TrackerPhoto;
+  archived?: boolean;       // cleared from the weekly inbox, still available in History
   month?: string;           // month printed/written on the page, e.g. "July"
   day?: string;             // day heading, e.g. "Monday — Chest, Biceps & Abs"
   weekNumber?: number | null;   // which WEEK column (1-4) was read
@@ -97,6 +101,14 @@ export interface TrackerEntry {
   exercises: TrackerExercise[];
   notes?: string;           // page notes / PRs / form cues
   rawText?: string;         // model's free-text transcription, for reference
+}
+
+export interface TrackerPhoto {
+  id: string;               // local JPEG filename stem; bytes stay off AsyncStorage
+  date: string;             // date used in the phone album
+  inAlbum: boolean;
+  needsReading: boolean;
+  column?: number;          // printed week column selected for a backfill
 }
 
 export type TimerPhase = 'set' | 'break' | 'amrap' | 'timed' | 'transition' | 'idle';

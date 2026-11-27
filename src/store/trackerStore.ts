@@ -23,7 +23,7 @@ interface TrackerState {
   hydrate: () => Promise<void>;
   setApiKey: (key: string) => Promise<void>;
   addEntry: (entry: TrackerEntry) => Promise<void>;
-  updateEntry: (id: string, patch: Partial<TrackerEntry>) => Promise<void>;
+  updateEntry: (id: string, patch: Partial<TrackerEntry> | ((current: TrackerEntry) => Partial<TrackerEntry>)) => Promise<void>;
   deleteEntry: (id: string) => Promise<void>;
   addBodyweight: (kg: number, date?: Date) => Promise<void>;
   deleteBodyweight: (id: string) => Promise<void>;
@@ -35,6 +35,12 @@ interface TrackerState {
 // Serialize mutations and publish state only after storage accepts the write.
 // A failed save leaves the previous state intact and does not poison later retries.
 let pendingWrite: Promise<void> = Promise.resolve();
+function checkSessionLink(entries: TrackerEntry[], entry: TrackerEntry) {
+  if (entry.sessionId && entries.some(e => e.id !== entry.id && e.sessionId === entry.sessionId)) {
+    throw new Error('This workout already has a tracker page. Open it in History.');
+  }
+}
+
 function persistChange(change: () => Promise<void>): Promise<void> {
   const next = pendingWrite.then(change);
   pendingWrite = next.catch(() => {});
@@ -63,13 +69,18 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
   },
   addEntry(entry) {
     return persistChange(async () => {
+      checkSessionLink(get().entries, entry);
       const entries=[entry,...get().entries.filter(e=>e.id!==entry.id)];
       await AsyncStorage.setItem(KEYS.entries,JSON.stringify(entries)); set({entries});
     });
   },
   updateEntry(id,patch) {
     return persistChange(async () => {
-      const entries=get().entries.map(e=>e.id===id?{...e,...patch,id:e.id}:e);
+      const previous = get().entries.find(e => e.id === id);
+      if (!previous) throw new Error('This tracker entry is no longer available.');
+      const updated = { ...previous, ...(typeof patch === 'function' ? patch(previous) : patch), id };
+      checkSessionLink(get().entries, updated);
+      const entries = get().entries.map(e => e.id === id ? updated : e);
       await AsyncStorage.setItem(KEYS.entries,JSON.stringify(entries)); set({entries});
     });
   },
@@ -100,7 +111,9 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
   },
   clearWeeksBefore(currentWeek) {
     return persistChange(async () => {
-      const entries=get().entries.filter(e=>e.weekKey>=currentWeek);
+      const entries = get().entries
+        .filter(e => e.weekKey >= currentWeek || e.sessionId || e.photo)
+        .map(e => e.weekKey < currentWeek ? { ...e, archived: true } : e);
       const bodyweights=get().bodyweights.filter(b=>b.weekKey>=currentWeek);
       await AsyncStorage.multiSet([[KEYS.entries,JSON.stringify(entries)],[KEYS.bodyweight,JSON.stringify(bodyweights)]]);
       set({entries,bodyweights});

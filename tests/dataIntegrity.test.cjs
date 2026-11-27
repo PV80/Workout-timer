@@ -4,8 +4,8 @@ function load(file,deps,exports){
   const source=stripTypeScriptTypes(fs.readFileSync(path.join(__dirname,'..',file),'utf8').replace(/^import\s+[\s\S]*?from\s+['"][^'"]+['"];?\s*/gm,'')).replace(/^export\s+/gm,'');
   return new Function(...Object.keys(deps),source+';return {'+exports+'}')(...Object.values(deps));
 }
-const {weekKey}=load('src/utils/week.ts',{},'weekKey');
-const {buildWeekCsv}=load('src/utils/csv.ts',{weekKey},'buildWeekCsv');
+const {weekKey,localDate}=load('src/utils/week.ts',{},'weekKey,localDate');
+const {buildWeekCsv}=load('src/utils/csv.ts',{weekKey,localDate},'buildWeekCsv');
 const {assertValidBackup}=load('src/utils/backupValidation.ts',{},'assertValidBackup');
 const {DEFAULT_SETTINGS}=load('src/utils/timing.ts',{},'DEFAULT_SETTINGS');
 const date='2026-10-01T12:00:00Z',week=weekKey(new Date(date));
@@ -108,4 +108,117 @@ test('clearing previous weeks retains current and future tracker records',async(
   const r=trackerRuntime(),s=r.useTrackerStore.getState();
   for(const [id,w] of [['old','2026-W39'],['current','2026-W40'],['future','2026-W41']])await s.addEntry({...entry('Bench'),id,weekKey:w});
   await s.clearWeeksBefore('2026-W40');assert.deepEqual(r.useTrackerStore.getState().entries.map(e=>e.id),['future','current']);
+});
+
+const workout = { id: 'tue-am', day: 'tuesday', date: '2026-09-22T09:00:00Z' };
+function pageCapture() {
+  const tracker = trackerRuntime();
+  const files = new Map(), album = new Map(), calls = [], reads = [];
+  const config = { cancel: false, cameraAllowed: true, albumFails: false, readFails: false };
+  let id = 0;
+  const pick = source => async () => {
+    calls.push(source);
+    return config.cancel ? { canceled: true } : { assets: [{ base64: 'jpeg-' + id }] };
+  };
+  const capture = load('src/utils/trackerCapture.ts', {
+    useTrackerStore: tracker.useTrackerStore, weekKey, localDate,
+    Crypto: { randomUUID: () => '4d1f9900-abba-4444-8000-' + String(++id).padStart(12, '0') },
+    ImagePicker: { requestCameraPermissionsAsync: async () => ({ granted: config.cameraAllowed }),
+      launchCameraAsync: pick('camera'), launchImageLibraryAsync: pick('library') },
+    writeTrackerPhoto: async (id, jpeg) => files.set(id, jpeg), readTrackerPhoto: async id => files.get(id),
+    discardPrivatePhoto: async id => files.delete(id),
+    copyToTrackerAlbum: async photo => {
+      if (config.albumFails) throw Error('gallery unavailable');
+      album.set(photo.id, files.get(photo.id));
+    },
+    parseTrackerImage: async (jpeg, key, selection) => {
+      reads.push({ jpeg, key, selection });
+      if (config.readFails) throw Error('offline');
+      return { month: 'September', day: 'Tuesday', weekNumber: 2, exercises: entry('Squat').exercises };
+    },
+  }, 'runTrackerCapture,savePhoneCopy,readPageEntries,linkTrackerEntry');
+  return { ...capture, ...tracker, state: () => tracker.useTrackerStore.getState(), files, album, calls, reads, config };
+}
+
+test('late camera capture attaches to the exact workout, saves a JPEG without a key, and reads the selected column later', async () => {
+  const r = pageCapture();
+  const result = await r.runTrackerCapture('camera', workout, 2);
+  assert.equal(result.status, 'saved');
+  const saved = r.state().entries[0];
+  assert.equal(saved.sessionId, workout.id); assert.equal(saved.workoutDate, '2026-09-22');
+  assert.equal(saved.weekKey, '2026-W39'); assert.notEqual(saved.capturedAt, workout.date);
+  assert.equal(saved.photo.date, saved.workoutDate); assert.equal(saved.photo.inAlbum, true);
+  assert.equal(saved.photo.needsReading, true); assert.equal(r.files.get(saved.photo.id), r.album.get(saved.photo.id));
+  assert.deepEqual(r.calls, ['camera']); assert.equal(r.reads.length, 0);
+  await r.state().setApiKey('test-key'); await r.readPageEntries(saved);
+  assert.deepEqual(r.reads[0].selection, { date: saved.workoutDate, historical: true, column: 2 });
+  assert.equal(r.state().entries.length, 1); assert.equal(r.state().entries[0].photo.needsReading, false);
+});
+
+test('gallery and OCR failures preserve the attached file and both operations can be retried separately', async () => {
+  const r = pageCapture(); await r.state().setApiKey('test-key');
+  r.config.albumFails = true; r.config.readFails = true;
+  const result = await r.runTrackerCapture('library', workout);
+  assert.equal(result.status, 'saved'); assert.equal(result.notices.length, 2);
+  const saved = r.state().entries[0]; assert.equal(saved.photo.inAlbum, false); assert.equal(saved.photo.needsReading, true);
+  r.config.albumFails = false; r.config.readFails = false;
+  await r.savePhoneCopy(saved); await r.savePhoneCopy(saved); await r.readPageEntries(saved);
+  assert.equal(r.album.size, 1); assert.equal(r.state().entries.length, 1);
+  assert.equal(r.state().entries[0].photo.inAlbum, true); assert.equal(r.state().entries[0].photo.needsReading, false);
+});
+
+test('cancel, denied camera access and a failed durable write leave the workout and existing page untouched', async () => {
+  const r = pageCapture(); const saved = (await r.runTrackerCapture('library', workout)).entry;
+  r.config.cancel = true; assert.equal((await r.runTrackerCapture('library', workout)).status, 'cancelled');
+  r.config.cameraAllowed = false; assert.equal((await r.runTrackerCapture('camera', workout)).status, 'no-permission');
+  r.config.cancel = false; r.fail(true);
+  assert.equal((await r.runTrackerCapture('library', workout)).status, 'error');
+  assert.deepEqual(r.state().entries, [saved]); assert.equal(r.files.size, 1); assert.equal(r.album.size, 1);
+});
+
+test('linking a legacy page then attaching a photo preserves its manually corrected values and avoids duplicate rows', async () => {
+  const r = pageCapture(); const old = entry('Squat'); await r.state().addEntry(old);
+  await r.linkTrackerEntry(old.id, workout); await r.state().setApiKey('test-key');
+  await r.runTrackerCapture('library', workout);
+  const [page] = r.state().entries; assert.equal(page.id, old.id); assert.deepEqual(page.exercises, old.exercises);
+  assert.ok(page.photo); assert.equal(r.reads.length, 0); assert.equal(r.state().entries.length, 1);
+  await r.state().clearWeeksBefore('2026-W48');
+  assert.equal(r.state().entries[0].archived, true); assert.equal(r.state().entries[0].sessionId, workout.id);
+});
+
+test('a photo reading that finishes after a retake cannot overwrite the replacement', async () => {
+  const r = pageCapture(); const first = (await r.runTrackerCapture('library', workout)).entry;
+  const second = (await r.runTrackerCapture('library', workout)).entry;
+  await r.state().setApiKey('test-key');
+  await assert.rejects(r.readPageEntries(first), /changed/);
+  assert.deepEqual(r.state().entries, [second]); assert.equal(r.album.size, 2);
+});
+
+test('linked exports choose the selected session on a repeated day, preserve other timers, and keep the capture and workout dates distinct', () => {
+  const early = { ...workout, setRecords: [record('squat', 'Squat', 29)] };
+  const late = { ...early, id: 'tue-pm', date: '2026-09-22T16:00:00Z', setRecords: [record('squat', 'Squat', 54)] };
+  const page = { ...entry('Squat'), sessionId: early.id, workoutDate: '2026-09-22', weekKey: '2026-W39', day: 'Misread heading' };
+  const rows = buildWeekCsv([page], [], [late, early]).split('\n').slice(1).map(r => r.split(','));
+  assert.equal(rows.length, 2); assert.equal(rows[0][0], date.slice(0, 10)); assert.equal(rows[0][11], '29');
+  assert.deepEqual(rows[0].slice(-2), ['2026-09-22', early.id]); assert.equal(rows[1][11], '54');
+  assert.equal(buildWeekCsv([{ ...page, sessionId: 'unknown' }], [], [early]).split('\n')[1].split(',')[11], '');
+});
+
+test('a later or blank week column cannot replace the requested handwritten sets', async () => {
+  const r = pageCapture(); await r.state().setApiKey('test-key');
+  const result = await r.runTrackerCapture('camera', workout, 1);
+  assert.equal(result.status, 'saved'); assert.equal(r.state().entries[0].exercises.length, 0);
+  assert.equal(r.state().entries[0].photo.needsReading, true); assert.ok(r.state().entries[0].photo.inAlbum);
+});
+
+test('a restored photo link accepts a dated ID, rejects paths and impossible dates, and legacy backups still load', async () => {
+  const r = pageCapture(); const result = await r.runTrackerCapture('camera', workout);
+  const b = backup(); b.trackerEntries = [result.entry]; assert.doesNotThrow(() => assertValidBackup(b));
+  b.trackerEntries[0].photo.date = '2026-11-31'; assert.throws(() => assertValidBackup(b));
+  b.trackerEntries[0].photo.date = '2026-11-27'; b.trackerEntries[0].photo.id = '../data'; assert.throws(() => assertValidBackup(b));
+});
+
+test('Excel receives UTF-8 CSV with a single BOM so printed week headings and multiplication signs survive', async () => {
+  const r = exporter(); await r.exportWeekFiles([{ ...entry('Legs — 4×8'), day: 'TUESDAY — Legs' }], [], week);
+  assert.ok(r.writes[0].data.startsWith('\uFEFFcaptured,')); assert.match(r.writes[0].data, /TUESDAY — Legs/);
 });

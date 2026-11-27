@@ -1,5 +1,5 @@
 import { BodyweightEntry, SetRecord, TrackerEntry, WorkoutSession } from '../types';
-import { weekKey } from './week';
+import { localDate, weekKey } from './week';
 
 function esc(v: string | number | boolean | null | undefined): string {
   const s = v == null ? '' : String(v);
@@ -42,14 +42,14 @@ function dayNameFrom(heading: string | undefined): string | null {
 
 /**
  * Look up how long a set actually took according to the app timer.
- * Sessions are matched to the page by ISO week + weekday, then the exercise
- * by fuzzy name, then the exact set number.
+ * Callers select the exact linked session or provide the legacy week/day candidates.
  */
 function findTimerRecord(
   sessions: WorkoutSession[], entry: TrackerEntry, exerciseName: string, setNumber: number,
 ): SetRecord | null {
   const entryDay=dayNameFrom(entry.day);
-  const candidates=sessions.filter(s=>weekKey(new Date(s.date))===entry.weekKey && (!entryDay||s.day===entryDay))
+  const candidates=sessions.filter(s=>entry.sessionId ? s.id===entry.sessionId :
+    weekKey(new Date(s.date))===entry.weekKey && (!entryDay||s.day===entryDay))
     .flatMap(s=>s.setRecords).filter(r=>r.setNumber===setNumber)
     .map(record=>({record,score:nameScore(record.exerciseName,exerciseName)})).filter(c=>c.score>0);
   const best=Math.max(0,...candidates.map(c=>c.score));
@@ -72,19 +72,22 @@ export function buildWeekCsv(
 ): string {
   // Newest session first so a restarted day resolves to the completed run.
   const byDateDesc = [...sessions].sort((a, b) => b.date.localeCompare(a.date));
+  const linkedSessions = new Set(entries.filter(e => e.sessionId).map(e => e.sessionId));
+  const legacySessions = byDateDesc.filter(s => !linkedSessions.has(s.id));
 
   const header = [
     'captured', 'month', 'day', 'page_week', 'week_date',
-    'exercise', 'target', 'set', 'reps', 'weight', 'duration_s', 'set_time_s', 'inferred', 'raw', 'notes',
+    'exercise', 'target', 'set', 'reps', 'weight', 'duration_s', 'set_time_s', 'inferred', 'raw', 'notes', 'workout_date', 'session_id',
   ];
   const rows: string[] = [header.join(',')];
   const matchedRecords = new Set<SetRecord>();
 
   for (const entry of entries) {
     const captured = entry.capturedAt.slice(0, 10);
+    const candidates = entry.sessionId ? byDateDesc : legacySessions;
     for (const ex of entry.exercises) {
       ex.sets.forEach((s) => {
-        const timerRecord = findTimerRecord(byDateDesc, entry, ex.name, s.setNumber);
+        const timerRecord = findTimerRecord(candidates, entry, ex.name, s.setNumber);
         if (timerRecord) matchedRecords.add(timerRecord);
         const timerSeconds = timerRecord?.actualSetDuration == null ? null : Math.round(timerRecord.actualSetDuration);
         rows.push(
@@ -103,7 +106,7 @@ export function buildWeekCsv(
             esc(timerSeconds ?? ''),
             esc(s.inferred ? 'yes' : ''),
             esc(s.raw ?? ''),
-            esc(s.notes ?? ''),
+            esc(s.notes ?? ''), esc(entry.workoutDate ?? captured), esc(entry.sessionId),
           ].join(','),
         );
       });
@@ -115,7 +118,7 @@ export function buildWeekCsv(
     if (matchedRecords.has(record)) continue;
     rows.push([session.date.slice(0,10),'',session.day,'','',record.exerciseName,'',record.setNumber,
       '','','',record.actualSetDuration == null ? '' : Math.round(record.actualSetDuration),'','',
-      `Timer record; session ${session.id}`].map(esc).join(','));
+      `Timer record; session ${session.id}`, localDate(new Date(session.date)), session.id].map(esc).join(','));
   }
 
   // Bodyweight weigh-ins as their own rows (exercise = "Bodyweight", weight = kg).
@@ -128,7 +131,7 @@ export function buildWeekCsv(
         '', '', '',
         esc(b.kg),
         '', '', '', '',
-        esc('weekly weigh-in'),
+        esc('weekly weigh-in'), esc(localDate(new Date(b.date))), '',
       ].join(','),
     );
   }

@@ -110,7 +110,7 @@ test('restart preserves all earlier sets, rest durations, and session identity t
   assert.equal(session.setRecords.length, 4);
   assert.equal(session.setRecords[0].actualSetDuration, 40);
   assert.equal(r.disk.has('active_workout'), false);
-  const week = load('src/utils/week.ts', {}, ['weekKey']);
+  const week = load('src/utils/week.ts', {}, ['weekKey','localDate']);
   const { buildWeekCsv } = load('src/utils/csv.ts', week, ['buildWeekCsv']);
   const csv = buildWeekCsv([{
     id: 'page', capturedAt: session.date, weekKey: week.weekKey(new Date(session.date)), day: 'Monday',

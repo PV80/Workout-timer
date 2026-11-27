@@ -156,8 +156,16 @@ export async function parseBodyweightImage(
 export async function parseTrackerImage(
   base64Jpeg: string,
   apiKey: string,
+  selection?: { date?: string; historical: boolean; column?: number },
 ): Promise<ParsedTracker> {
-  const text = await callVision(base64Jpeg, PROMPT, apiKey, 4096);
+  let whichWeek = '';
+  if (selection?.column) {
+    whichWeek = `Read ONLY printed WEEK ${selection.column}, even if later columns are filled. Return no exercises if that column is blank.`;
+  } else if (selection?.historical && selection.date) {
+    whichWeek = `Read ONLY the column dated for the selected workout on ${selection.date}. If the handwritten dates do not uniquely identify it, return no exercises so the user can select the printed week. Never substitute a different column.`;
+  }
+  const prompt = whichWeek ? PROMPT.replace(/(WHICH WEEK TO READ\n)[^\n]+/, '$1' + whichWeek) : PROMPT;
+  const text = await callVision(base64Jpeg, prompt, apiKey, 4096);
 
   const parsed = JSON.parse(extractJson(text));
   return {

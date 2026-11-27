@@ -1,7 +1,7 @@
 import { ArtworkHero } from '../src/components/ArtworkHero';
 import { PageHeader } from '../src/components/PageHeader';
 import { theme } from '../src/theme';
-import { router } from 'expo-router';
+import { SessionTracker } from '../src/components/SessionTracker';
 import React, { useState } from 'react';
 import { LayoutAnimation, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, UIManager, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-import { ChevronLeftIcon, ChevronUpIcon } from '../src/components/icons';
+import { ChevronUpIcon } from '../src/components/icons';
 import { useHistoryStore } from '../src/store/historyStore';
 import { getWorkoutByDay } from '../src/data/workouts';
 import { formatHoursMinutes, formatDate } from '../src/utils/time';
@@ -66,11 +66,17 @@ export default function HistoryScreen() {
           const isExpanded = expandedId === session.id;
           const workout = getWorkoutByDay(session.day);
           const dayAbbr = DAY_ABBR[session.day] ?? session.day.slice(0, 3).toUpperCase();
+          const dateTime = formatDate(session.date) + ' · ' +
+            new Date(session.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
           const stats = isExpanded ? computeExerciseStats(session) : [];
 
           return (
             <View key={session.id}>
               <TouchableOpacity
+                accessibilityRole="button"
+                testID={`history-session-${session.id}`}
+                accessibilityState={{ expanded: isExpanded }}
+                accessibilityLabel={`${session.day}, ${dateTime}, ${session.setRecords.length} sets`}
                 onPress={() => toggleExpand(session.id)}
                 style={[styles.row, isExpanded ? styles.rowExpanded : {}]}
                 activeOpacity={0.7}
@@ -80,7 +86,7 @@ export default function HistoryScreen() {
                     <View style={styles.dayBadge}>
                       <Text style={styles.dayBadgeText}>{dayAbbr}</Text>
                     </View>
-                    <Text style={styles.dateText}>{formatDate(session.date)}</Text>
+                    <Text style={styles.dateText}>{dateTime}</Text>
                   </View>
                   <Text style={styles.muscleText}>{workout?.muscleGroups ?? '—'}</Text>
                 </View>
@@ -98,6 +104,7 @@ export default function HistoryScreen() {
                       <Text style={styles.detailStat}>{s.stat}</Text>
                     </View>
                   ))}
+                  <SessionTracker session={session} />
                   <TouchableOpacity
                     onPress={() => toggleExpand(session.id)}
                     style={styles.collapseBtn}

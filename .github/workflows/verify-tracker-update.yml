@@ -1,0 +1,96 @@
+name: Verify tracker photo update
+on:
+  push:
+    branches: ['verify/history-photo-android']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check that the APK and this test have identical application sources
+        run: git diff --exit-code 54e48d7771f4e2c9c2fe6cf01d89fca08d79406b HEAD -- . ':(exclude)scripts/android-smoke.py' ':(exclude).github/workflows/android.yml' ':(exclude).github/workflows/verify-tracker-update.yml'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Wait for the release-mode update APK
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const params = { owner: context.repo.owner, repo: context.repo.repo, run_id: 45932066034 };
+            for (let attempt = 0; attempt < 30; attempt++) {
+              const result = await github.rest.actions.listWorkflowRunArtifacts(params);
+              if (result.data.artifacts.some(a => a.name === 'workout-timer-update-existing-debug' && !a.expired)) return;
+              const run = await github.rest.actions.getWorkflowRun(params);
+              if (run.data.status === 'completed') throw new Error('No APK produced by candidate build');
+              await new Promise(resolve => setTimeout(resolve, 30000));
+            }
+            throw new Error('Timed out waiting for the APK');
+      - uses: actions/download-artifact@v4
+        with:
+          name: workout-timer-update-existing-debug
+          path: apk/update
+          run-id: 45932066034
+          github-token: ${{ github.token }}
+      - name: Find previous debug-compatible APK for upgrade regression
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
+              owner: context.repo.owner, repo: context.repo.repo, per_page: 100
+            });
+            const baseline = artifacts.find(a => !a.expired &&
+              a.workflow_run?.head_branch === 'main' &&
+              a.workflow_run?.id !== context.runId &&
+              ['workout-timer-debug', 'workout-timer-update-existing-debug'].includes(a.name));
+            if (baseline) {
+              const zip = await github.rest.actions.downloadArtifact({
+                owner: context.repo.owner, repo: context.repo.repo,
+                artifact_id: baseline.id, archive_format: 'zip'
+              });
+              fs.writeFileSync('baseline.zip', Buffer.from(zip.data));
+              core.info(`Upgrade baseline: ${baseline.name} from run ${baseline.workflow_run.id}`);
+            } else {
+              core.warning('No previous compatible APK is available; only fresh install will be checked.');
+            }
+      - name: Prepare emulator checks
+        run: |
+          python3 -m pip install Pillow uiautomator2==3.7.0
+          if [ -f baseline.zip ]; then unzip baseline.zip -d apk/baseline; fi
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Test installation, upgrade, recovery, and offline pictures
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back emulated
+          script: bash scripts/run-android-smoke.sh
+      - name: Upload native screenshots and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-native-evidence
+          path: native-evidence
+          if-no-files-found: warn
+      - name: Name and checksum the tested APK
+        run: |
+          mkdir -p verified
+          cp apk/update/app-release.apk verified/WorkoutTimer-1.2.0-update.apk
+          sha256sum verified/WorkoutTimer-1.2.0-update.apk
+      - name: Downloadable update
+        uses: actions/upload-artifact@v4
+        with:
+          name: WorkoutTimer-1.2.0-verified-update
+          path: verified/WorkoutTimer-1.2.0-update.apk
+          if-no-files-found: error

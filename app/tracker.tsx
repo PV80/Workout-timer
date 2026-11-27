@@ -320,7 +320,7 @@ export default function TrackerScreen() {
     const olderBw = bodyweights.filter((b) => b.weekKey < week);
     Alert.alert(
       'Export & clear previous weeks?',
-      `Export ${older.length + olderBw.length} item(s) from previous weeks to a CSV, then remove them to start fresh?`,
+      `Export ${older.length + olderBw.length} older item(s) and clear them from the weekly list? Linked pages stay in History and photos stay in your phone albums.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {

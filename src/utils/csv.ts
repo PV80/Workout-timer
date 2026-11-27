@@ -72,7 +72,7 @@ export function buildWeekCsv(
 ): string {
   // Newest session first so a restarted day resolves to the completed run.
   const byDateDesc = [...sessions].sort((a, b) => b.date.localeCompare(a.date));
-  const linkedSessions = new Set(entries.filter(e => e.sessionId && e.exercises.length).map(e => e.sessionId));
+  const linkedSessions = new Set(entries.filter(e => e.sessionId).map(e => e.sessionId));
   const legacySessions = byDateDesc.filter(s => !linkedSessions.has(s.id));
 
   const header = [

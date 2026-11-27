@@ -51,19 +51,20 @@ export function SessionTracker({ session }: { session: WorkoutSession }) {
     <Text style={styles.heading}>Tracker page</Text>
     {linked && <Text style={styles.caption}>{linked.title ?? 'Workout page'} · {linked.exercises.length} exercises logged</Text>}
     {linked?.photo && <TrackerPhotoCard entry={linked} />}
-    {!linked?.photo && week !== weekKey() && <WeekColumnPicker value={column} onChange={setColumn} />}
-    <TouchableOpacity accessibilityRole="button" onPress={capture} disabled={busy} style={styles.button}>
-      <ActionGlyph kind="capture" size={24} />
-      <Text style={styles.action}>{busy ? 'Saving…' : linked?.photo ? 'Replace tracker photo' : 'Log tracker page'}</Text>
-    </TouchableOpacity>
-    {linked && <TouchableOpacity accessibilityRole="button" style={styles.link} disabled={busy} onPress={exportWorkoutWeek}>
-      <Text style={styles.action}>Export workout week · {week}</Text>
-    </TouchableOpacity>}
     {candidates.map(e =>
       <TouchableOpacity key={e.id} accessibilityRole="button" onPress={() => link(e.id)} disabled={busy} style={styles.link}>
         <Text style={styles.action}>Link existing page · {e.title || 'Workout page'}</Text>
         <Text style={styles.caption}>{e.capturedAt.slice(0, 10)} · {e.exercises.length} exercises</Text>
       </TouchableOpacity>)}
+    {!linked?.photo && week !== weekKey() && <WeekColumnPicker value={column} onChange={setColumn} />}
+    <TouchableOpacity accessibilityRole="button" onPress={capture} disabled={busy} style={styles.button}>
+      <ActionGlyph kind="capture" size={24} />
+      <Text style={styles.action}>{busy ? 'Saving…' : linked?.photo ? 'Replace tracker photo' : linked ? 'Attach photo to logged page' : candidates.length ? 'Log a separate tracker page' : 'Log tracker page'}</Text>
+    </TouchableOpacity>
+    {linked && <TouchableOpacity accessibilityRole="button" style={styles.link} disabled={busy} onPress={exportWorkoutWeek}>
+      <Text style={styles.action}>Export workout week · {week}</Text>
+    </TouchableOpacity>}
+
   </View>;
 }
 

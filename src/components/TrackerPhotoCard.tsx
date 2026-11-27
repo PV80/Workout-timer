@@ -28,16 +28,17 @@ export function TrackerPhotoCard({ entry }: { entry: TrackerEntry }) {
   const [open, setOpen] = useState(false);
   const [missing, setMissing] = useState(false);
   const [reading, setReading] = useState(false);
+  const [chooseAgain, setChooseAgain] = useState(false);
   const [saving, setSaving] = useState(false);
   const [column, setColumn] = useState(photo?.column);
-  useEffect(() => { setMissing(false); setColumn(photo?.column); }, [photo?.id, photo?.column]);
+  useEffect(() => { setMissing(false); setChooseAgain(false); setColumn(photo?.column); }, [photo?.id, photo?.column]);
   if (!photo) return null;
   const source = { uri: trackerPhotoUri(photo.id) };
   const busy = reading || saving;
 
   async function read() {
     setReading(true);
-    try { await readPageEntries(entry, column); }
+    try { await readPageEntries(entry, column); setChooseAgain(false); }
     catch (e) { Alert.alert('Page could not be read', e instanceof Error ? e.message : 'Try again.'); }
     finally { setReading(false); }
   }
@@ -54,15 +55,22 @@ export function TrackerPhotoCard({ entry }: { entry: TrackerEntry }) {
       <TouchableOpacity accessibilityRole="button" accessibilityLabel="View tracker photo" onPress={() => setOpen(true)}>
         <Image source={source} resizeMode="cover" style={styles.thumb} onError={() => setMissing(true)} />
       </TouchableOpacity>}
-    <Text style={styles.muted}>{photo.inAlbum ? 'Phone album · Workout Tracker ' + photo.date.slice(0, 7) : 'Phone album copy pending'}</Text>
+    {!missing && <Text style={styles.muted}>{photo.inAlbum ? 'Phone album · Workout Tracker ' + photo.date.slice(0, 7) : 'Phone album copy pending'}</Text>}
     {!photo.inAlbum && !missing && <TouchableOpacity accessibilityRole="button" disabled={busy} onPress={save} style={styles.link}>
       <Text style={styles.action}>{saving ? 'Saving…' : 'Save to phone album'}</Text>
     </TouchableOpacity>}
-    {photo.needsReading && !missing && (hasKey ? <>
+    {!missing && !photo.needsReading && !chooseAgain && hasKey && <TouchableOpacity
+      accessibilityRole="button" style={styles.link} onPress={() => setChooseAgain(true)}>
+      <Text style={styles.action}>Read a different week column</Text>
+    </TouchableOpacity>}
+    {(photo.needsReading || chooseAgain) && !missing && (hasKey ? <>
       <WeekColumnPicker value={column} onChange={setColumn} />
       <TouchableOpacity accessibilityRole="button" disabled={busy} onPress={read} style={styles.link}>
-        <Text style={styles.action}>{reading ? 'Reading…' : 'Read handwritten sets'}</Text>
+        <Text style={styles.action}>{reading ? 'Reading…' : chooseAgain ? 'Replace saved readings' : 'Read handwritten sets'}</Text>
       </TouchableOpacity>
+      {chooseAgain && <TouchableOpacity accessibilityRole="button" style={styles.link} disabled={busy} onPress={() => setChooseAgain(false)}>
+        <Text style={styles.muted}>Keep existing readings</Text>
+      </TouchableOpacity>}
     </> : <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/settings')} style={styles.link}>
       <Text style={styles.action}>Set up handwriting recognition</Text>
     </TouchableOpacity>)}

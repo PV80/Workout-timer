@@ -66,6 +66,8 @@ export default function HistoryScreen() {
           const isExpanded = expandedId === session.id;
           const workout = getWorkoutByDay(session.day);
           const dayAbbr = DAY_ABBR[session.day] ?? session.day.slice(0, 3).toUpperCase();
+          const dateTime = formatDate(session.date) + ' · ' +
+            new Date(session.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
           const stats = isExpanded ? computeExerciseStats(session) : [];
 
           return (
@@ -74,7 +76,7 @@ export default function HistoryScreen() {
                 accessibilityRole="button"
                 testID={`history-session-${session.id}`}
                 accessibilityState={{ expanded: isExpanded }}
-                accessibilityLabel={`${session.day}, ${formatDate(session.date)}, ${session.setRecords.length} sets`}
+                accessibilityLabel={`${session.day}, ${dateTime}, ${session.setRecords.length} sets`}
                 onPress={() => toggleExpand(session.id)}
                 style={[styles.row, isExpanded ? styles.rowExpanded : {}]}
                 activeOpacity={0.7}
@@ -84,7 +86,7 @@ export default function HistoryScreen() {
                     <View style={styles.dayBadge}>
                       <Text style={styles.dayBadgeText}>{dayAbbr}</Text>
                     </View>
-                    <Text style={styles.dateText}>{formatDate(session.date)}</Text>
+                    <Text style={styles.dateText}>{dateTime}</Text>
                   </View>
                   <Text style={styles.muscleText}>{workout?.muscleGroups ?? '—'}</Text>
                 </View>

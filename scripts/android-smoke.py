@@ -8,7 +8,6 @@ import json
 from pathlib import Path
 import re
 import sqlite3
-import shlex
 import subprocess
 import time
 import xml.etree.ElementTree as ET
@@ -160,6 +159,16 @@ def read_storage(label):
     with sqlite3.connect(folder/'RKStorage') as db:
         return dict(db.execute('SELECT key,value FROM catalystLocalStorage'))
 
+def pull_jpeg(remote, artifact):
+    # adb's sync protocol accepts spaces literally and reports missing files.
+    path = OUT / artifact
+    adb('pull', remote, path)
+    with Image.open(path) as img:
+        assert img.format == 'JPEG' and min(img.size) > 100, (artifact, img.format, img.size)
+        img.verify()
+    return path.read_bytes()
+
+
 def pick_tracker_fixture():
     # Android 15 system Photo Picker and the cropper bundled with expo-image-picker.
     thumb = device(resourceIdMatches=r".*:id/(icon_thumbnail|photopicker_item_thumbnail|thumbnail)")
@@ -251,10 +260,11 @@ def check_history_photo():
     assert page['sessionId'] == selected['id'] and page['workoutDate'] == '2026-11-24'
     assert page['weekKey'] == '2026-W48' and page['photo']['needsReading'] and page['photo']['inAlbum']
     photo_id = page['photo']['id']
-    private = adb('exec-out', 'cat', f'/data/data/{PACKAGE}/files/tracker-pages/{photo_id}.jpg', binary=True)
+    private = pull_jpeg(f'/data/data/{PACKAGE}/files/tracker-pages/{photo_id}.jpg', 'app-tracker-page.jpg')
     name = f'2026-11-24_W48_Tuesday_{photo_id}.jpg'
-    public = adb('exec-out', 'cat', shlex.quote('/sdcard/Pictures/Workout Tracker 2026-11/' + name), binary=True)
-    assert private.startswith(b'\xff\xd8\xff') and len(private) > 1000 and private == public
+    first_path = '/sdcard/Pictures/Workout Tracker 2026-11/' + name
+    public = pull_jpeg(first_path, 'gallery-tracker-page.jpg')
+    assert private == public, 'Gallery photo differs from the stored app photo'
     indexed = adb('shell', 'content', 'query', '--uri', 'content://media/external/images/media',
                   '--projection', '_display_name:relative_path:is_pending')
     assert any(name in line and 'Workout Tracker 2026-11/' in line and 'is_pending=0' in line for line in indexed.splitlines())
@@ -281,9 +291,9 @@ def check_history_photo():
     camera = next(e['photo'] for e in pages if e['sessionId'] == 'fixture-later')
     assert camera['inAlbum'] and camera['id'] != photo_id
     camera_path = f"/sdcard/Pictures/Workout Tracker 2026-11/2026-11-24_W48_Tuesday_{camera['id']}.jpg"
-    camera_bytes = adb('exec-out', 'cat', shlex.quote(camera_path), binary=True)
-    assert camera_bytes.startswith(b'\xff\xd8\xff') and len(camera_bytes) > 1000 and camera_bytes != public
-    assert adb('exec-out', 'cat', shlex.quote('/sdcard/Pictures/Workout Tracker 2026-11/' + name), binary=True) == public
+    camera_bytes = pull_jpeg(camera_path, 'captured-camera-page.jpg')
+    assert camera_bytes != public
+    assert pull_jpeg(first_path, 'first-page-after-camera.jpg') == public
     assert json.loads(both['session_history']) == sessions
     print('Android camera capture produced a second dated gallery JPEG and retained the first photo and both workouts.', flush=True)
 

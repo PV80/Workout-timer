@@ -172,6 +172,35 @@ def pick_tracker_fixture():
     crop.click()
 
 
+def take_tracker_fixture():
+    # Exercise the Android camera intent on an emulator with a virtual back camera.
+    adb('shell', 'pm', 'grant', PACKAGE, 'android.permission.CAMERA')
+    tap('Take photo')
+    shutter = device(descriptionMatches=r'(?i)(shutter|take photo|take picture|capture photo)')
+    shutter_id = device(resourceIdMatches=r'.*:id/(shutter_button|photo_capture|shutter)')
+    until = time.monotonic() + 30
+    while time.monotonic() < until:
+        if shutter.exists or shutter_id.exists:
+            (shutter if shutter.exists else shutter_id).click()
+            break
+        for label in ('No thanks', 'OK, GOT IT', 'While using the app', 'Continue', 'Next'):
+            button = device(textMatches='(?i)' + re.escape(label))
+            if button.exists:
+                button.click()
+                break
+        time.sleep(.5)
+    else:
+        raise AssertionError('The system camera shutter never appeared')
+    approve = device(descriptionMatches=r'(?i)(review done|done|ok|save|confirm|save photo)')
+    if not approve.wait(timeout=9):
+        approve = device(resourceIdMatches=r'.*:id/(done_button|review_done|btn_done|photo_done|intent_review_done)')
+    assert approve.wait(timeout=6), 'Camera did not offer to use the captured photo'
+    approve.click()
+    crop = device(resourceIdMatches=r'.*:id/crop_image_menu_crop')
+    assert crop.wait(timeout=15), 'Camera photo did not reach the cropper'
+    crop.click()
+
+
 def check_history_photo():
     # Seed two distinct finished sessions on a disposable phone. Select the older
     # one so always using the most recent session cannot pass.
@@ -236,6 +265,28 @@ def check_history_photo():
     tap('View tracker photo', scroll=True)
     tap('Close photo')
     print('History gallery capture, cancellation, session identity, cold reopen and published monthly album JPEG passed.', flush=True)
+    adb('shell', 'am', 'force-stop', PACKAGE)
+    launch()
+    tap('History')
+    later = device(resourceIdMatches=r'.*history-session-fixture-later')
+    assert later.wait(timeout=10)
+    later.click()
+    tap('Log tracker page', scroll=True)
+    take_tracker_fixture()
+    assert device(text='Tracker photo attached').wait(timeout=20), 'Camera capture did not finish offline'
+    tap('OK')
+    both = read_storage('after-camera-photo')
+    pages = json.loads(both['tracker_entries'])
+    assert sorted(e['sessionId'] for e in pages) == ['fixture-later', 'fixture-tue']
+    camera = next(e['photo'] for e in pages if e['sessionId'] == 'fixture-later')
+    assert camera['inAlbum'] and camera['id'] != photo_id
+    camera_path = f"/sdcard/Pictures/Workout Tracker 2026-11/2026-11-24_W48_Tuesday_{camera['id']}.jpg"
+    camera_bytes = adb('exec-out', 'cat', shlex.quote(camera_path), binary=True)
+    assert camera_bytes.startswith(b'\xff\xd8\xff') and len(camera_bytes) > 1000 and camera_bytes != public
+    assert adb('exec-out', 'cat', shlex.quote('/sdcard/Pictures/Workout Tracker 2026-11/' + name), binary=True) == public
+    assert json.loads(both['session_history']) == sessions
+    print('Android camera capture produced a second dated gallery JPEG and retained the first photo and both workouts.', flush=True)
+
 
 
 try:

@@ -8,6 +8,7 @@ export function assertValidBackup(data: any): void {
   const nullable = (v: any) => v === null || num(v);
   const integer = (v: any) => Number.isInteger(v) && v >= 1;
   const week = (v: any) => typeof v === 'string' && /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/.test(v);
+  const calendarDay = (v: any) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && date(v) && new Date(v).toISOString().startsWith(v);
   const collection = (v: any, valid: (r: any) => boolean, unique = false) => {
     if (!Array.isArray(v) || !v.every(r => obj(r) && valid(r))) fail();
     if (unique && new Set(v.map((r: any) => r.id)).size !== v.length) fail();
@@ -23,6 +24,15 @@ export function assertValidBackup(data: any): void {
   }, true);
   collection(data.trackerEntries, r => {
     if (!(text(r.id) && date(r.capturedAt) && week(r.weekKey))) return false;
+    if (r.archived !== undefined && typeof r.archived !== 'boolean') return false;
+    if (r.sessionId !== undefined && !text(r.sessionId)) return false;
+    if (r.workoutDate !== undefined && !calendarDay(r.workoutDate)) return false;
+    if (r.photo !== undefined) {
+      const p = r.photo;
+      if (!obj(p) || typeof p.id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.id) ||
+          !calendarDay(p.date) || typeof p.inAlbum !== 'boolean' || typeof p.needsReading !== 'boolean' ||
+          (p.column !== undefined && !(integer(p.column) && p.column <= 4))) return false;
+    }
     for (const k of ['month','day','weekDate','title','notes','rawText']) if (r[k] !== undefined && typeof r[k] !== 'string') return false;
     if (r.weekNumber !== undefined && r.weekNumber !== null && !integer(r.weekNumber)) return false;
     collection(r.exercises, ex => {

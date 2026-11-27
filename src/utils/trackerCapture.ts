@@ -2,15 +2,14 @@ import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { useTrackerStore } from '../store/trackerStore';
 import { parseBodyweightImage, parseTrackerImage } from './claudeClient';
-import { weekKey } from './week';
-import { TrackerEntry } from '../types';
+import { localDate, weekKey } from './week';
+import { TrackerEntry, TrackerPhoto, WorkoutSession } from '../types';
+import { copyToTrackerAlbum, discardPrivatePhoto, readTrackerPhoto, writeTrackerPhoto } from './trackerPhotos';
 
 export type CaptureResult =
-  | { status: 'saved'; entry: TrackerEntry }
+  | { status: 'saved'; entry: TrackerEntry; notices: string[] }
   | { status: 'cancelled' }
-  | { status: 'no-key' }
   | { status: 'no-permission' }
-  | { status: 'empty' }
   | { status: 'error'; message: string };
 
 export type BodyweightCaptureResult =
@@ -25,7 +24,7 @@ export type CaptureSource = 'camera' | 'library';
 
 /** Open the camera or photo library and return a base64 JPEG, or a failure status. */
 async function grabImage(
-  source: CaptureSource,
+  source: CaptureSource, quality = 0.5,
 ): Promise<{ ok: true; base64: string } | { ok: false; status: 'cancelled' | 'no-permission' }> {
   let shot: ImagePicker.ImagePickerResult;
   if (source === 'library') {
@@ -33,7 +32,7 @@ async function grabImage(
     // runtime permission.
     shot = await ImagePicker.launchImageLibraryAsync({
       base64: true,
-      quality: 0.5,
+      quality,
       allowsEditing: true,
       mediaTypes: ['images'],
     });
@@ -42,7 +41,7 @@ async function grabImage(
     if (!perm.granted) return { ok: false, status: 'no-permission' };
     shot = await ImagePicker.launchCameraAsync({
       base64: true,
-      quality: 0.5,
+      quality,
       allowsEditing: true,
     });
   }
@@ -50,42 +49,107 @@ async function grabImage(
   return { ok: true, base64: shot.assets[0].base64 };
 }
 
-/**
- * Full capture flow shared by the Tracker screen and the post-workout screen:
- * checks the API key, opens the camera, parses the page with Claude, and saves
- * the entry. UI concerns (alerts, busy state, navigation) stay in the caller.
- */
-export async function runTrackerCapture(source: CaptureSource = 'camera'): Promise<CaptureResult> {
-  const { apiKey, addEntry } = useTrackerStore.getState();
-  if (!apiKey) return { status: 'no-key' };
+type Session = Pick<WorkoutSession, 'id' | 'date' | 'day'>;
 
-  const img = await grabImage(source);
-  if (!img.ok) return { status: img.status };
+export function sessionFields(session: Session) {
+  const date = new Date(session.date);
+  return { sessionId: session.id, workoutDate: localDate(date), weekKey: weekKey(date) };
+}
 
+export function linkTrackerEntry(id: string, session: Session) {
+  return useTrackerStore.getState().updateEntry(id, current => {
+    if (current.sessionId && current.sessionId !== session.id) throw new Error('That page is already linked to another workout.');
+    return sessionFields(session);
+  });
+}
+
+function updatePhoto(entry: TrackerEntry, change: Partial<TrackerPhoto>, fields: Partial<TrackerEntry> = {}) {
+  return useTrackerStore.getState().updateEntry(entry.id, current => {
+    if (!current.photo || current.photo.id !== entry.photo?.id) throw new Error('The tracker photo has changed. Open the current photo.');
+    return { ...fields, photo: { ...current.photo, ...change } };
+  });
+}
+
+export async function savePhoneCopy(entry: TrackerEntry) {
+  if (!entry.photo) throw new Error('Attach a photo first.');
+  await copyToTrackerAlbum(entry.photo);
+  await updatePhoto(entry, { inAlbum: true });
+}
+
+export async function readPageEntries(entry: TrackerEntry, column = entry.photo?.column, jpeg?: string) {
+  const key = useTrackerStore.getState().apiKey;
+  if (!key) throw new Error('Add your API key in Settings when you want to read the handwriting.');
+  if (!entry.photo) throw new Error('Attach a photo first.');
+  const historical = Boolean(entry.sessionId && entry.weekKey !== weekKey());
+  const parsed = await parseTrackerImage(jpeg ?? await readTrackerPhoto(entry.photo.id), key, {
+    date: entry.workoutDate, historical, column,
+  });
+  if (!parsed.exercises.some(ex => ex.sets.length) || (column && parsed.weekNumber !== column)) {
+    throw new Error('No sets could be read for this workout. Choose the printed week and try again, or attach a clearer photo.');
+  }
+  const title = [parsed.month, parsed.day].filter(Boolean).join(' · ');
+  await updatePhoto(entry, { needsReading: false, column }, {
+    month: parsed.month ?? undefined, day: parsed.day ?? entry.day,
+    title: title || entry.title, weekNumber: parsed.weekNumber, weekDate: parsed.weekDate ?? undefined,
+    exercises: parsed.exercises, notes: parsed.notes ?? undefined, rawText: parsed.rawText,
+  });
+}
+
+const message = (error: unknown) => error instanceof Error ? error.message : 'Please try again.';
+
+/** Save the photo and its session link before either the gallery write or network read. */
+export async function runTrackerCapture(
+  source: CaptureSource = 'camera', session?: Session, column?: number,
+): Promise<CaptureResult> {
   try {
-    const parsed = await parseTrackerImage(img.base64, apiKey);
-    if (parsed.exercises.length === 0) return { status: 'empty' };
+    const image = await grabImage(source, 0.85);
+    if (!image.ok) return { status: image.status };
 
-    const dayLabel = parsed.day ?? undefined;
-    const title = [parsed.month, dayLabel].filter(Boolean).join(' · ') || 'Workout page';
-
-    const entry: TrackerEntry = {
-      id: Crypto.randomUUID(),
-      capturedAt: new Date().toISOString(),
-      weekKey: weekKey(),
-      month: parsed.month ?? undefined,
-      day: dayLabel,
-      weekNumber: parsed.weekNumber,
-      weekDate: parsed.weekDate ?? undefined,
-      title,
-      exercises: parsed.exercises,
-      notes: parsed.notes ?? undefined,
-      rawText: parsed.rawText,
+    const store = useTrackerStore.getState();
+    const previous = session ? store.entries.find(e => e.sessionId === session.id) : undefined;
+    const now = new Date();
+    const workoutDate = localDate(session ? new Date(session.date) : now);
+    const photo: TrackerPhoto = {
+      id: Crypto.randomUUID(), date: workoutDate, inAlbum: false,
+      needsReading: !previous?.exercises.length, column,
     };
-    await addEntry(entry);
-    return { status: 'saved', entry };
-  } catch (e: any) {
-    return { status: 'error', message: e?.message ?? 'Failed to parse the page.' };
+    const entry: TrackerEntry = previous ? { ...previous, photo } : {
+      id: Crypto.randomUUID(), capturedAt: now.toISOString(), exercises: [], day: session?.day,
+      title: session ? session.day[0].toUpperCase() + session.day.slice(1) + ' · ' + workoutDate : 'Workout page',
+      ...(session ? sessionFields(session) : { workoutDate, weekKey: weekKey(now) }), photo,
+    };
+    try {
+      await writeTrackerPhoto(photo.id, image.base64);
+      if (previous) {
+        // A retake changes the image while preserving any corrections already on the page.
+        await store.updateEntry(previous.id, current => {
+          if (current.photo?.id !== previous.photo?.id) throw new Error('Another photo was attached to this workout. Please reopen it.');
+          return { photo };
+        });
+      } else {
+        await store.addEntry(entry);
+      }
+    } catch (error) {
+      await discardPrivatePhoto(photo.id).catch(() => {});
+      throw error;
+    }
+    if (previous?.photo) await discardPrivatePhoto(previous.photo.id).catch(() => {});
+    const notices: string[] = [];
+    try {
+      await savePhoneCopy(entry);
+    } catch (error) {
+      notices.push('Gallery copy pending. ' + message(error));
+    }
+    if (photo.needsReading) {
+      try {
+        await readPageEntries(entry, column, image.base64);
+      } catch (error) {
+        notices.push(message(error));
+      }
+    }
+    return { status: 'saved', entry: useTrackerStore.getState().entries.find(e => e.id === entry.id) ?? entry, notices };
+  } catch (error) {
+    return { status: 'error', message: message(error) };
   }
 }
 

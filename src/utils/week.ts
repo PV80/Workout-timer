@@ -1,3 +1,8 @@
+export function localDate(date: Date): string {
+  return [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map(part => String(part).padStart(2, '0')).join('-');
+}
+
 /** ISO-8601 week key, e.g. "2026-W27". Weeks start Monday. */
 export function weekKey(date: Date = new Date()): string {
   // Copy and shift to Thursday of the current week (ISO weeks are Thursday-anchored).

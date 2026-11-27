@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import re
 import sqlite3
+import shlex
 import subprocess
 import time
 import xml.etree.ElementTree as ET
@@ -159,6 +160,84 @@ def read_storage(label):
     with sqlite3.connect(folder/'RKStorage') as db:
         return dict(db.execute('SELECT key,value FROM catalystLocalStorage'))
 
+def pick_tracker_fixture():
+    # Android 15 system Photo Picker and the cropper bundled with expo-image-picker.
+    thumb = device(resourceIdMatches=r".*:id/(icon_thumbnail|photopicker_item_thumbnail|thumbnail)")
+    if not thumb.wait(timeout=10):
+        thumb = device(descriptionMatches=r"(?i).*photo taken.*")
+    assert thumb.wait(timeout=10), "Photo Picker did not show the indexed test photo"
+    thumb[0].click()
+    crop = device(resourceIdMatches=r".*:id/crop_image_menu_crop")
+    assert crop.wait(timeout=15), "The selected picture did not reach the cropper"
+    crop.click()
+
+
+def check_history_photo():
+    # Seed two distinct finished sessions on a disposable phone. Select the older
+    # one so always using the most recent session cannot pass.
+    label = 'tracker-fixture'
+    read_storage(label)
+    date = '2026-11-24T09:00:00Z'
+    record = dict(exerciseId='squat', exerciseName='Squat', setNumber=1,
+                  predictedSetDuration=50, actualSetDuration=29, predictedBreakDuration=None,
+                  actualBreakDuration=0, completedAt=date)
+    selected = dict(id='fixture-tue', day='tuesday', date=date, totalDuration=32,
+                    exercisesCompleted=1, setRecords=[record])
+    sessions = [dict(selected, id='fixture-later', date='2026-11-24T16:00:00Z'), selected]
+    with sqlite3.connect(OUT / label / 'RKStorage') as db:
+        db.execute('INSERT OR REPLACE INTO catalystLocalStorage VALUES (?,?)',
+                   ('session_history', json.dumps(sessions)))
+        db.commit()
+        db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+    target = f'/data/data/{PACKAGE}/databases/RKStorage'
+    adb('push', OUT / label / 'RKStorage', '/data/local/tmp/tracker-fixture.db')
+    adb('shell', f'cat /data/local/tmp/tracker-fixture.db > {target} && rm -f {target}-wal {target}-shm')
+
+    fixture = OUT / 'sample-tracker.jpg'
+    Image.new('RGB', (600, 820), '#ddbb82').save(fixture)
+    external = '/sdcard/Pictures/handwritten-test-page.jpg'
+    adb('shell', 'mkdir', '-p', '/sdcard/Pictures')
+    adb('push', fixture, external)
+    adb('shell', 'am', 'broadcast', '-a', 'android.intent.action.MEDIA_SCANNER_SCAN_FILE', '-d', 'file://' + external)
+    launch()
+    tap('History')
+    row = device(resourceIdMatches=r'.*history-session-fixture-tue')
+    assert row.wait(timeout=10)
+    row.click()
+    tap('Log tracker page', scroll=True)
+    tap('Cancel')
+    tap('Log tracker page')
+    tap('Choose from library')
+    pick_tracker_fixture()
+    assert device(text='Tracker photo attached').wait(timeout=20), 'Capture did not finish offline'
+    tap('OK')
+    tap('View tracker photo', scroll=True)
+    capture('history-logged-photo')
+    tap('Close photo')
+    data = read_storage('after-tracker-photo')
+    assert json.loads(data['session_history']) == sessions, 'Attaching a page modified workout timings'
+    entries = json.loads(data['tracker_entries'])
+    assert len(entries) == 1
+    page = entries[0]
+    assert page['sessionId'] == selected['id'] and page['workoutDate'] == '2026-11-24'
+    assert page['weekKey'] == '2026-W48' and page['photo']['needsReading'] and page['photo']['inAlbum']
+    photo_id = page['photo']['id']
+    private = adb('exec-out', 'cat', f'/data/data/{PACKAGE}/files/tracker-pages/{photo_id}.jpg', binary=True)
+    name = f'2026-11-24_W48_Tuesday_{photo_id}.jpg'
+    public = adb('exec-out', 'cat', shlex.quote('/sdcard/Pictures/Workout Tracker 2026-11/' + name), binary=True)
+    assert private.startswith(b'\xff\xd8\xff') and len(private) > 1000 and private == public
+    indexed = adb('shell', 'content', 'query', '--uri', 'content://media/external/images/media',
+                  '--projection', '_display_name:relative_path:is_pending')
+    assert any(name in line and 'Workout Tracker 2026-11/' in line and 'is_pending=0' in line for line in indexed.splitlines())
+    launch()
+    tap('History')
+    assert row.wait(timeout=10)
+    row.click()
+    tap('View tracker photo', scroll=True)
+    tap('Close photo')
+    print('History gallery capture, cancellation, session identity, cold reopen and published monthly album JPEG passed.', flush=True)
+
+
 try:
     adb('root')
     adb('wait-for-device')
@@ -215,6 +294,7 @@ try:
     tap('Back')
     tap('Tracker')
     check_artwork('compatible-tracker')
+    check_history_photo()
     if a.release:
         # The keys deliberately differ. Production release is tested as a clean
         # install; it must not be offered as an update to debug-signed users.

@@ -1,7 +1,7 @@
 import { ArtworkHero } from '../src/components/ArtworkHero';
 import { PageHeader } from '../src/components/PageHeader';
 import { theme } from '../src/theme';
-import { router } from 'expo-router';
+import { SessionTracker } from '../src/components/SessionTracker';
 import React, { useState } from 'react';
 import { LayoutAnimation, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, UIManager, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-import { ChevronLeftIcon, ChevronUpIcon } from '../src/components/icons';
+import { ChevronUpIcon } from '../src/components/icons';
 import { useHistoryStore } from '../src/store/historyStore';
 import { getWorkoutByDay } from '../src/data/workouts';
 import { formatHoursMinutes, formatDate } from '../src/utils/time';
@@ -71,6 +71,10 @@ export default function HistoryScreen() {
           return (
             <View key={session.id}>
               <TouchableOpacity
+                accessibilityRole="button"
+                testID={`history-session-${session.id}`}
+                accessibilityState={{ expanded: isExpanded }}
+                accessibilityLabel={`${session.day}, ${formatDate(session.date)}, ${session.setRecords.length} sets`}
                 onPress={() => toggleExpand(session.id)}
                 style={[styles.row, isExpanded ? styles.rowExpanded : {}]}
                 activeOpacity={0.7}
@@ -98,6 +102,7 @@ export default function HistoryScreen() {
                       <Text style={styles.detailStat}>{s.stat}</Text>
                     </View>
                   ))}
+                  <SessionTracker session={session} />
                   <TouchableOpacity
                     onPress={() => toggleExpand(session.id)}
                     style={styles.collapseBtn}

@@ -28,81 +28,11 @@ import { useTrackerStore, currentWeekKey } from '../src/store/trackerStore';
 import {
   runTrackerCapture,
   runBodyweightCapture,
-  BodyweightCaptureResult,
-  CaptureResult,
-  CaptureSource,
 } from '../src/utils/trackerCapture';
+import { handleBodyweightResult, handleCaptureResult, promptCaptureSource } from '../src/utils/capturePrompts';
+import { TrackerPhotoCard } from '../src/components/TrackerPhotoCard';
 import { exportCurrentWeek, exportWeekFiles } from '../src/utils/exportWeek';
 import { BodyweightEntry, TrackerEntry, TrackerExercise, TrackerSet } from '../src/types';
-
-/** Ask whether to use the camera or an existing photo, then run the chosen flow. */
-export function promptCaptureSource(
-  run: (source: CaptureSource) => void,
-  copy?: { title: string; message: string },
-) {
-  Alert.alert(
-    copy?.title ?? 'Log tracker page',
-    copy?.message ?? 'Photograph the page now, or pick a photo you already took.',
-    [
-      { text: 'Take photo', onPress: () => run('camera') },
-      { text: 'Choose from library', onPress: () => run('library') },
-      { text: 'Cancel', style: 'cancel' },
-    ],
-  );
-}
-
-/** Map a bodyweight capture result to an alert. Returns true if a weight was saved. */
-export function handleBodyweightResult(r: BodyweightCaptureResult): boolean {
-  switch (r.status) {
-    case 'saved':
-      Alert.alert('Bodyweight logged', `${r.kg} kg saved — it'll be in this week's CSV.`);
-      return true;
-    case 'no-key':
-      Alert.alert('API key needed', 'Add your Anthropic API key in Settings → Tracker & API to read weigh-in photos.', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Open Settings', onPress: () => router.push('/settings') },
-      ]);
-      return false;
-    case 'no-permission':
-      Alert.alert('Camera permission', 'Camera access is needed to photograph your scale.');
-      return false;
-    case 'empty':
-      Alert.alert('Couldn’t read the weight', 'No bodyweight was detected. Try a clear, straight-on photo of the scale display.');
-      return false;
-    case 'error':
-      Alert.alert('Reading failed', r.message);
-      return false;
-    case 'cancelled':
-    default:
-      return false;
-  }
-}
-
-/** Map a capture result to a user-facing alert. Returns true if an entry was saved. */
-export function handleCaptureResult(r: CaptureResult): boolean {
-  switch (r.status) {
-    case 'saved':
-      return true;
-    case 'no-key':
-      Alert.alert('API key needed', 'Add your Anthropic API key in Settings → Tracker & API to parse photos.', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Open Settings', onPress: () => router.push('/settings') },
-      ]);
-      return false;
-    case 'no-permission':
-      Alert.alert('Camera permission', 'Camera access is needed to photograph your tracker page.');
-      return false;
-    case 'empty':
-      Alert.alert('Couldn’t read the page', 'No exercises were detected. Try a clearer, well-lit, straight-on photo.');
-      return false;
-    case 'error':
-      Alert.alert('Parsing failed', r.message);
-      return false;
-    case 'cancelled':
-    default:
-      return false;
-  }
-}
 
 function describeSet(s: TrackerSet): string {
   if (s.durationSeconds) return `${Math.round(s.durationSeconds / 60)}m`;
@@ -262,7 +192,7 @@ export default function TrackerScreen() {
   const week = currentWeekKey();
   const thisWeek = useMemo(() => entries.filter((e) => e.weekKey === week), [entries, week]);
   const weekBw = useMemo(() => bodyweights.filter((b) => b.weekKey === week), [bodyweights, week]);
-  const olderCount = entries.length - thisWeek.length + (bodyweights.length - weekBw.length);
+  const olderCount = entries.filter(e => e.weekKey < week && !e.archived).length + bodyweights.filter(b => b.weekKey < week).length;
 
   // In review mode start with the newest page open so checking begins at once.
   useEffect(() => {
@@ -386,7 +316,7 @@ export default function TrackerScreen() {
   }
 
   function handleExportOlder() {
-    const older = entries.filter((e) => e.weekKey < week);
+    const older = entries.filter((e) => e.weekKey < week && !e.archived);
     const olderBw = bodyweights.filter((b) => b.weekKey < week);
     Alert.alert(
       'Export & clear previous weeks?',
@@ -435,7 +365,7 @@ export default function TrackerScreen() {
           <TouchableOpacity style={styles.warnCard} onPress={() => router.push('/settings')} activeOpacity={0.8}>
             <Text style={styles.warnTitle}>Add your Anthropic API key</Text>
             <Text style={styles.warnBody}>
-              Photo parsing uses the Claude API. Add your key in Settings → Tracker & API to enable capture.
+              You can save photos now. Add your key to read the handwritten sets.
             </Text>
           </TouchableOpacity>
         )}
@@ -531,7 +461,7 @@ export default function TrackerScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.cardTitle}>{entry.title || 'Workout page'}</Text>
                   <Text style={styles.cardMeta}>
-                    {entry.capturedAt.slice(0, 10)}{sub ? ` · ${sub}` : ''} · {entry.exercises.length} exercises · {setCount} sets
+                    {entry.workoutDate ?? entry.capturedAt.slice(0, 10)}{sub ? ` · ${sub}` : ''} · {entry.exercises.length} exercises · {setCount} sets
                   </Text>
                 </View>
                 {expanded ? (
@@ -543,6 +473,7 @@ export default function TrackerScreen() {
 
               {expanded && (
                 <View style={styles.cardBody}>
+                  {entry.photo && <TrackerPhotoCard entry={entry} />}
                   {editingId === entry.id ? (
                     <EntryEditor entry={entry} onClose={() => setEditingId(null)} />
                   ) : (

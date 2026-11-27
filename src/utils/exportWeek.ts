@@ -30,7 +30,8 @@ export async function exportWeekFiles(
   // Sessions provide the app-timed per-set durations (set_time_s column).
   const csv = buildWeekCsv(entries, bodyweights, sessions);
   const csvUri = `${FileSystem.cacheDirectory}workout-${label}.csv`;
-  await FileSystem.writeAsStringAsync(csvUri, csv, { encoding: FileSystem.EncodingType.UTF8 });
+  // Excel recognises UTF-8 by its BOM when opening a CSV directly.
+  await FileSystem.writeAsStringAsync(csvUri, '\uFEFF' + csv, { encoding: FileSystem.EncodingType.UTF8 });
 
   const backup = buildBackup();
   const jsonUri = `${FileSystem.cacheDirectory}workout-backup-${label}.json`;
